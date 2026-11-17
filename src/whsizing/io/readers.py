@@ -16,7 +16,13 @@ import fastexcel
 import polars as pl
 
 from whsizing.errors import MappingError
-from whsizing.io.sniff import EXCEL_SUFFIXES, saved_sniff, sniff_csv, sniff_rows
+from whsizing.io.sniff import (
+    EXCEL_SUFFIXES,
+    _fields,  # pyright: ignore[reportPrivateUsage]
+    saved_sniff,
+    sniff_csv,
+    sniff_rows,
+)
 from whsizing.logging import get_logger
 from whsizing.schemas.ingest import Mapping
 from whsizing.schemas.manifest import SniffResult
@@ -81,7 +87,8 @@ def _decode(data: bytes, encoding: str) -> str:
 def _read_csv(path: Path, mapping: Mapping | None) -> RawTable:
     sn = sniff_csv(path, mapping)
     text = _decode(path.read_bytes(), sn.encoding).replace("\r\n", "\n").replace("\r", "\n")
-    body = text.split("\n", sn.header_row - 1)[-1]  # the sniff's lines (`split_lines`)
+    parts = text.split("\n", sn.header_row - 1)  # the sniff's lines (`split_lines`)
+    body = parts[-1] if len(parts) == sn.header_row else ""  # fewer lines: no header row at all
     delimiter = sn.delimiter or ","
     try:
         df = pl.read_csv(
@@ -91,12 +98,17 @@ def _read_csv(path: Path, mapping: Mapping | None) -> RawTable:
             infer_schema=False,
             truncate_ragged_lines=True,
         )
+    except pl.exceptions.NoDataError as e:  # an empty file, or a saved header_row past its end
+        raise MappingError(
+            f"{path.name}: nothing to read from header row {sn.header_row} on (the file is empty, "
+            "or `header_row` in the mapping is past its last line); check the file or the mapping"
+        ) from e
     except pl.exceptions.ComputeError:
         # a stray quote in an unquoted field (Ecran 24" LED): read again like the sniff does
         get_logger().warning("csv_lenient_quotes", file=path.name)
         df = _read_csv_lenient(path, body, delimiter)
     df = df.with_row_index(SOURCE_ROW, offset=sn.header_row + 1)
-    header = next(csv.reader([body.partition("\n")[0]], delimiter=delimiter))
+    header = _fields(body.partition("\n")[0], delimiter)
     return _finish(path, df, sn, header)
 
 
@@ -133,6 +145,11 @@ def _read_excel(path: Path, sheet: str | int | None, mapping: Mapping | None) ->
     frame = grid.to_polars()
     rows = [[c or "" for c in r] for r in frame.head(2050).rows()]
     header, decimal, date_format, _ = sniff_rows(rows, fixed.get("header_row"))
+    if header >= len(rows):  # a saved header_row past the last row read: an empty or short sheet
+        raise MappingError(
+            f"{path.name}: sheet {name!r} has {len(rows)} row(s), fewer than the mapping's "
+            f"`header_row` ({header + 1}); check the file or the mapping"
+        )
     names_row = [c.strip() if c else f"column_{j + 1}" for j, c in enumerate(rows[header])]
     df = frame.slice(header + 1)
     df = df.rename(dict(zip(df.columns, _unique(names_row), strict=True)))
@@ -240,6 +257,13 @@ def _finish(
     if len(set(stripped)) == len(stripped):
         df = df.rename(dict(zip(df.columns, stripped, strict=True)))
     cols = [c for c in df.columns if c != SOURCE_ROW]
+    regex = next((j for j, c in enumerate(cols, 1) if c.startswith("^") and c.endswith("$")), None)
+    if regex is not None:  # polars takes such a name for a regex selector: no column can carry it
+        raise MappingError(
+            f"{path.name}: header cell {regex} starts with ^ and ends with $, which polars reads "
+            "as a regular expression, not as a column name; check that it is a text export, or "
+            "rename the column"
+        )
     df = df.with_columns(pl.col(cols).cast(pl.Utf8).str.strip_chars().replace("", None))
     blank = pl.all_horizontal(pl.col(cols).is_null())
     repeated = pl.all_horizontal(pl.col(c) == c for c in cols).fill_null(False)

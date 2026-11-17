@@ -148,20 +148,30 @@ def image_boxes(path: Path) -> list[tuple[int, int, int, float, float]]:
 
 DIAGRAM_MIN_PT = 6.5  # zone labels of a block diagram: 7.1 pt as set (4.4 pt with 5.5 px type)
 APPENDIX_C_MIN_PT = 5.7  # the loosest typesetting sets Appendix C at 5.8 pt or more
-LEGEND = re.compile(r"^\D+ \d[\d,. ]* m²$")  # "Circulation 137 m²", a zone label of a diagram
+LEGEND = re.compile(r"^\D+\d[\d,.]*m²$")  # "Circulation137m²": a zone label, spaces removed
+
+
+def unspaced(text: str) -> str:
+    """`text` without any whitespace. WeasyPrint sets the text of an SVG one letter at a time and
+    draws no space: a label's word gaps are positions, which an extractor turns back into spaces
+    from the font's space width. A font subset that holds no space glyph (the DejaVu Sans of the
+    diagrams when the pages are set in Liberation Sans, both installed) gives pypdf no reliable
+    width: it can read "Circulation137m²" from a PDF that looks as it does with one font."""
+    return "".join(text.split())
 
 
 def diagram_label_sizes(path: Path, lang: Lang, scenarios: list[str]) -> list[float]:
     """Sizes (pt) of the zone labels ("Name 137 m²") on the pages that hold a block diagram; every
-    scenario's diagram title must be found, and its labels (3 zones at least)."""
-    pages = [squash(p) for p in pdf_pages(path)]
+    scenario's diagram title must be found, and its labels (3 zones at least). Text is compared
+    without its spaces (`unspaced`)."""
+    pages = [unspaced(p) for p in pdf_pages(path)]
     on = set()
     for sid in scenarios:
         title = t("diagram.title", lang, scenario=sid)
-        found = {n for n, text in enumerate(pages, 1) if title in text}
+        found = {n for n, text in enumerate(pages, 1) if unspaced(title) in text}
         assert found, f"no block diagram titled {title!r}"
         on |= found
-    sizes = [s for n, s, x in text_sizes(path) if n in on and LEGEND.match(plain(x))]
+    sizes = [s for n, s, x in text_sizes(path) if n in on and LEGEND.match(unspaced(x))]
     assert len(sizes) >= 3 * len(scenarios), len(sizes)
     return sizes
 

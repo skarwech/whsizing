@@ -5,7 +5,7 @@ tests/e2e/test_f10_cli_e2e.py."""
 from __future__ import annotations
 
 import json
-import random
+import re
 import shutil
 import signal
 import threading
@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 import typer.main
 import yaml
+from tests.unit.test_f2_r6 import garbage, quoted_table
 from typer.testing import CliRunner
 
 import whsizing.cli.data as cli_data
@@ -30,6 +31,7 @@ from whsizing.schemas import Range
 ROOT = Path(__file__).resolve().parents[2]
 TINY = ROOT / "tests" / "golden" / "tiny_golden"
 runner = CliRunner()
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 COMMANDS = [
     ["synth"],
@@ -55,17 +57,25 @@ def salt(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_T10_1_every_command_has_help(argv: list[str]) -> None:
     res = runner.invoke(app, [*argv, "--help"])
     assert res.exit_code == 0, res.output
-    assert "Usage" in res.output
-    assert " ".join(argv) in res.output.replace("whsizing ", "")
+    help_text = plain(res.output)
+    assert "Usage" in help_text
+    assert " ".join(argv) in help_text.replace("whsizing ", "")
+
+
+def plain(text: str) -> str:
+    """The text without ANSI styles: Typer forces its rich help to a terminal when GITHUB_ACTIONS,
+    FORCE_COLOR or PY_COLORS is set, and the styles cut an option such as `--debug` in pieces."""
+    return ANSI.sub("", text)
 
 
 def test_T10_1_top_level_help_lists_every_command() -> None:
     res = runner.invoke(app, ["--help"])
     assert res.exit_code == 0
+    help_text = plain(res.output)
     for name in ("synth", "ingest", "profile", "basis", "size", "compare", "report", "run-all"):
-        assert name in res.output
+        assert name in help_text
     for name in ("calibrate", "rerun", "validate-catalog", "--debug", "--version"):
-        assert name in res.output
+        assert name in help_text
 
 
 def test_T10_1_basis_init_writes_the_template_and_never_overwrites(tmp_path: Path) -> None:
@@ -121,19 +131,94 @@ def test_R6_3_validate_catalog_lists_every_broken_file_and_exits_2(tmp_path: Pat
     assert "valid" not in res.stdout  # nothing reported as a success
 
 
-def test_R6_2_ingest_of_a_binary_file_exits_2_and_names_the_file(tmp_path: Path) -> None:
-    """`head -c 4000 /dev/urandom > g.csv; whsizing ingest g.csv ...` was exit 1 with a raw polars
-    ValueError (a sniffed multi-byte separator). Seed 7 repeats such a file."""
-    garbage = tmp_path / "g.csv"
-    garbage.write_bytes(random.Random(7).randbytes(4000))
-    res = runner.invoke(
-        app, ["ingest", str(garbage), "--dataset", "order_lines", "--non-interactive",
-              "--out-dir", str(tmp_path / "runs")]
+def ingest_order_lines(path: Path, runs: Path, *extra: str) -> Any:
+    return runner.invoke(
+        app, ["ingest", str(path), "--dataset", "order_lines", "--non-interactive",
+              "--out-dir", str(runs), *extra]
     )  # fmt: skip
+
+
+def error_line(res: Any) -> str:
+    """The `error: ...` line of stderr: the log lines above it name the file too."""
+    return next((ln for ln in res.stderr.splitlines() if ln.startswith("error: ")), "")
+
+
+def test_R6_2_ingest_of_a_multi_byte_separated_file_exits_2_and_names_the_file(
+    tmp_path: Path,
+) -> None:
+    """`head -c 4000 /dev/urandom > g.csv; whsizing ingest g.csv ...` was exit 1 with a raw polars
+    ValueError (a sniffed multi-byte separator: polars takes one byte). A random file sniffs one
+    on some CPython releases only; a file whose cells are joined by '§' does on all of them."""
+    res = ingest_order_lines(quoted_table(tmp_path, "§"), tmp_path / "runs")
     assert res.exit_code == 2, res.output
-    assert "g.csv" in res.stderr and "sniffed delimiter" in res.stderr
+    assert "g.csv" in error_line(res) and "sniffed delimiter" in error_line(res)
     assert "ValueError" not in res.output and "Traceback" not in res.output
     assert list((tmp_path / "runs").iterdir()) == []  # a failed ingest leaves no empty run folder
+
+
+def test_R6_2_ingest_of_a_binary_file_exits_2_and_names_the_file(tmp_path: Path) -> None:
+    """Whatever the sniffer makes of 30 `head -c 4000 /dev/urandom` files (a multi-byte separator,
+    an unclosed quote, no header row, a table the mapping then refuses: it differs between CPython
+    releases), `ingest` ends in exit 2 naming the file, no traceback, no run folder left."""
+    wrong = []
+    for seed in range(30):
+        runs = tmp_path / f"runs-{seed}"  # one folder per seed: a failure must not blame the next
+        res = ingest_order_lines(garbage(seed, tmp_path), runs)
+        leftovers = list(runs.iterdir())
+        if not (
+            res.exit_code == 2
+            and "g.csv" in error_line(res)
+            and "ValueError" not in res.output
+            and "Traceback" not in res.output
+            and not leftovers
+        ):
+            wrong.append(f"seed {seed}: exit {res.exit_code}, {error_line(res)!r}, {leftovers}")
+    assert not wrong, "\n".join(wrong)
+
+
+def test_R6_2_ingest_of_a_line_over_the_csv_field_limit_exits_2_and_names_the_file(
+    tmp_path: Path,
+) -> None:
+    """Was: `error: unexpected Error: field larger than field limit (131072)`, exit 1, no file
+    name, run folder kept (a zero-filled file, a one-line JSON export)."""
+    path = tmp_path / "g.csv"
+    path.write_bytes(b"\x00" * 200_000)
+    res = ingest_order_lines(path, tmp_path / "runs")
+    assert res.exit_code == 2, res.output
+    assert "g.csv" in error_line(res) and "unexpected" not in res.stderr
+    assert list((tmp_path / "runs").iterdir()) == []
+
+
+def test_R6_2_ingest_of_an_empty_file_with_a_saved_mapping_exits_2_and_names_the_file(
+    tmp_path: Path,
+) -> None:
+    """Was: `error: unexpected NoDataError: empty CSV`, exit 1, run folder kept: the mapping of the
+    last export (header_row 1) read against an export that came out empty."""
+    mapping = tmp_path / "order_lines.yaml"
+    mapping.write_text(
+        yaml.safe_dump({"dataset": "order_lines", "header_row": 1, "columns": {"order_id": "id"}}),
+        encoding="utf-8",
+    )
+    path = tmp_path / "g.csv"
+    path.write_bytes(b"")
+    res = ingest_order_lines(path, tmp_path / "runs", "--mapping", str(mapping))
+    assert res.exit_code == 2, res.output
+    assert "g.csv" in error_line(res) and "unexpected" not in res.stderr
+    assert list((tmp_path / "runs").iterdir()) == []
+
+
+def test_R6_2_ingest_of_a_header_cell_that_reads_as_a_regex_exits_2_and_names_the_file(
+    tmp_path: Path,
+) -> None:
+    """Was: `error: unexpected InvalidOperationError: invalid regex in selector '^[$'`, exit 1, no
+    file name, run folder kept (a header cell that starts with ^ and ends with $: polars takes it
+    for a regex; a binary file has one now and then)."""
+    path = tmp_path / "g.csv"
+    path.write_text("sku;^[$;a\nA;x;p\nB;y;q\n", encoding="utf-8")
+    res = ingest_order_lines(path, tmp_path / "runs")
+    assert res.exit_code == 2, res.output
+    assert "g.csv" in error_line(res) and "unexpected" not in res.stderr
+    assert list((tmp_path / "runs").iterdir()) == []
 
 
 def test_R6_2_ingest_of_a_corrupt_parquet_exits_2_and_names_the_file(tmp_path: Path) -> None:

@@ -131,7 +131,10 @@ def _decodes(head: bytes, enc: str) -> bool:
 
 
 def _fields(line: str, delimiter: str) -> list[str]:
-    return next(csv.reader([line], delimiter=delimiter), [])
+    try:
+        return next(csv.reader([line], delimiter=delimiter), [])
+    except csv.Error:  # a cell over csv.field_size_limit() (128 kB): binary, one-line JSON, ...
+        return line.split(delimiter)  # quotes ignored: enough to count cells, polars reads the file
 
 
 def detect_delimiter(lines: list[str]) -> str:
@@ -149,6 +152,9 @@ def detect_delimiter(lines: list[str]) -> str:
             best = key
     if best is not None:
         return best[2]
+    if any(len(ln) > csv.field_size_limit() for ln in sample):
+        # no table has such a line; the old csv.Sniffer (CPython up to 3.12.13) takes minutes on one
+        return ","
     try:
         return csv.Sniffer().sniff("\n".join(sample)).delimiter
     except csv.Error:

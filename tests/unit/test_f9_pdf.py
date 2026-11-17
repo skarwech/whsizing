@@ -18,6 +18,7 @@ from pypdf import PdfReader
 from tests.unit.test_f9_pdf_support import (
     APPENDIX_C_MIN_PT,
     DIAGRAM_MIN_PT,
+    LEGEND,
     RIGHT_EDGE_PT,
     appendix_c_sizes,
     diagram_label_sizes,
@@ -30,6 +31,7 @@ from tests.unit.test_f9_pdf_support import (
     squash,
     text_starts,
     trace_entry,
+    unspaced,
     without_baseline,
     without_scenario,
 )
@@ -38,6 +40,7 @@ from tests.unit.test_f9_tables_support import report_data, small_run
 from whsizing.errors import ConfigError, ReportIntegrityError
 from whsizing.report import data as report_data_module
 from whsizing.report import export_trace, load_report_data, render_cell, t
+from whsizing.report.diagram import build_diagram
 from whsizing.report.i18n import Lang
 from whsizing.report.pdf import STYLES, _css_str, build_pdf, fit_pdf, render_html  # pyright: ignore[reportPrivateUsage]
 from whsizing.report.pdf_text import caveats, trace_number
@@ -177,6 +180,37 @@ def test_F9c_diagram_labels_and_appendix_c_are_set_at_legible_sizes(
     assert min(diagram_label_sizes(pdfs[lang], lang, list(run.results))) >= DIAGRAM_MIN_PT
     runs = appendix_c_sizes(pdfs[lang], lang)
     assert min(s for _, s, _ in runs) >= APPENDIX_C_MIN_PT
+
+
+def test_F9c_diagram_labels_are_read_when_the_diagram_is_the_only_text_of_a_pdf(
+    run: RunOutput, tmp_path: Path
+) -> None:
+    """With no page text set in its font, the diagram's font subset holds no space glyph (the
+    report's case when Liberation Sans sets the pages and DejaVu Sans the diagrams), whatever
+    fonts are installed: the label reader must not depend on the spaces pypdf gives back."""
+    from weasyprint import HTML  # lazy: needs Pango
+
+    svg = build_diagram(report_data(run, "en"), "S0", tmp_path)
+    pdf = tmp_path / "diagram_only.pdf"
+    HTML(string=f'<img src="{svg.as_uri()}" width="560">').write_pdf(pdf)
+    assert len(diagram_label_sizes(pdf, "en", ["S0"])) >= 3
+
+
+@pytest.mark.parametrize(
+    ("text", "is_label"),
+    [
+        ("Circulation 137 m²", True),
+        ("Circulation137m²", True),  # the spaces pypdf does not read back
+        ("Bâtiment 12\u202f000 m²", True),  # FR thousands separator
+        ("Block diagram - S0", False),  # the title, the notes and the table rows are no labels
+        ("Source: engine 0.1.0+1ec0f16 · run 2026-11-18T14-02-11_854797", False),
+        ("Area deficit (m²) 0 0 0", False),
+    ],
+)
+def test_F9c_the_zone_label_pattern_takes_labels_with_or_without_spaces_and_no_other_text(
+    text: str, is_label: bool
+) -> None:
+    assert bool(LEGEND.match(unspaced(text))) is is_label
 
 
 @pytest.mark.parametrize("lang", LANGS)

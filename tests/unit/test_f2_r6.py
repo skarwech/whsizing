@@ -1,22 +1,29 @@
 """R6 remediation of the F2 findings: a parquet input under a folder with glob characters (I75 i),
 and a binary or garbage file that must be a MappingError (exit 2) naming the file, never the raw
-polars ValueError of a multi-byte separator (exit 1)."""
+polars ValueError of a multi-byte separator (exit 1) or another raw exception of the readers."""
 
 from __future__ import annotations
 
+import codecs
+import csv
 import random
+from collections.abc import Callable
 from pathlib import Path
 
 import polars as pl
 import pytest
+import xlsxwriter
 
 from whsizing.errors import ConfigError, MappingError
 from whsizing.io import ingest, read_any, sniff
 from whsizing.io.readers import read_parquet_file
+from whsizing.io.sniff import detect_delimiter, split_lines
 from whsizing.schemas.ingest import Mapping
+from whsizing.schemas.manifest import SniffResult
 from whsizing.schemas.project import InputSpec
 
 WEIRD = "client [2025] *x?"  # every glob character of fnmatch
+RANDOM_SEEDS = range(60)
 
 
 def garbage(seed: int, folder: Path) -> Path:
@@ -24,6 +31,42 @@ def garbage(seed: int, folder: Path) -> Path:
     path = folder / "g.csv"
     path.write_bytes(random.Random(seed).randbytes(4000))
     return path
+
+
+def quoted_table(folder: Path, separator: str) -> Path:
+    """`g.csv`: 12 rows of 3 quoted cells joined by `separator`. No `;` `,` TAB or `|`, so the
+    candidate delimiters find nothing and csv.Sniffer names the character between a closing and an
+    opening quote, i.e. `separator`: checked on CPython 3.12.0, .13, .14, .16, 3.13.0, .18, 3.14.0
+    and .10. The byte-order mark fixes the encoding (charset_normalizer has no stable verdict on
+    so short a text)."""
+    rows = [separator.join(f'"r{i}c{j}"' for j in range(3)) for i in range(12)]
+    path = folder / "g.csv"
+    path.write_bytes(codecs.BOM_UTF8 + "\n".join(rows).encode("utf-8"))
+    return path
+
+
+def two_columns(folder: Path) -> Path:
+    """`g.csv`, a `;` table of two columns: no row has the 3 cells of a header row."""
+    path = folder / "g.csv"
+    path.write_text("sku;qty\nA;1\nB;2\n", encoding="utf-8")
+    return path
+
+
+def broken_promise(read: Callable[[Path], SniffResult], path: Path) -> str | None:
+    """Why `read(path)` is not what the product promises for any file: a result whose delimiter
+    polars can take, or a MappingError (exit 2) that names the file. None when it keeps it."""
+    try:
+        result = read(path)
+    except MappingError as e:
+        return None if path.name in str(e) and e.exit_code == 2 else f"unnamed MappingError: {e}"
+    except Exception as e:
+        return f"raw {type(e).__name__}: {e}"
+    delimiter = result.delimiter or ","
+    return None if len(delimiter.encode("utf-8")) == 1 else f"delimiter {delimiter!r}"
+
+
+def read_any_sniff(path: Path) -> SniffResult:
+    return read_any(path).sniff
 
 
 # ------------------------------------------------------------------ I75 i: parquet input
@@ -61,22 +104,51 @@ def test_I75_i_the_helper_is_still_importable_from_ingest() -> None:
 
 
 # ------------------------------------------------------------------ R6.2: binary files
-@pytest.mark.parametrize("seed", [7, 9, 10])
+# polars takes a one-byte separator; csv.Sniffer can name any punctuation character, '§' included.
+# What it names for random bytes is no contract: its quote regexes were rewritten (a quadratic-time
+# fix) in CPython 3.12.14 and in later 3.13 and 3.14 releases. Tried: old behaviour on 3.12.0 to
+# .13, 3.13.0 and 3.14.0, new on 3.12.14 to .16, 3.13.18 and 3.14.10. Seeds 7 and 10 sniff '\x89'
+# and '¤' on the old, '@' and nothing on the new. The guard is tested on content that names the
+# character on all of them, the promise on a range of random files.
+SEPARATORS = [
+    pytest.param("§", id="U+00A7-2-bytes"),
+    pytest.param("¦", id="U+00A6-2-bytes"),
+    pytest.param("€", id="U+20AC-3-bytes"),
+]
+
+
+@pytest.mark.parametrize("separator", SEPARATORS)
 def test_R6_2_a_sniffed_multi_byte_separator_is_a_mapping_error_naming_the_file(
-    seed: int, tmp_path: Path
+    separator: str, tmp_path: Path
 ) -> None:
-    """Was: `ValueError: separator="\\x96" should be a single byte character` out of pl.read_csv
-    (about one random file in six), exit 1. These seeds all sniff a multi-byte delimiter."""
-    path = garbage(seed, tmp_path)
+    """Was: `ValueError: separator="\\x96" should be a single byte character` out of pl.read_csv,
+    exit 1."""
+    path = quoted_table(tmp_path, separator)
+    assert detect_delimiter(split_lines(path.read_text(encoding="utf-8-sig"))) == separator
     with pytest.raises(MappingError, match=r"g\.csv: not a readable CSV.*sniffed delimiter") as e:
         read_any(path)
     assert e.value.exit_code == 2
 
 
+@pytest.mark.parametrize("read", [sniff, read_any_sniff], ids=["sniff", "read_any"])
+def test_R6_2_a_random_binary_file_is_read_or_a_mapping_error_naming_the_file(
+    read: Callable[[Path], SniffResult], tmp_path: Path
+) -> None:
+    """What the sniffer makes of random bytes (a multi-byte separator, an unclosed quote, no
+    header row, a table of garbage) changes with the CPython release; that no raw exception or
+    unusable delimiter comes out must not. Every failure is listed with its seed."""
+    broken = [
+        (seed, why)
+        for seed in RANDOM_SEEDS
+        if (why := broken_promise(read, garbage(seed, tmp_path)))
+    ]
+    assert not broken, "\n".join(f"seed {seed}: {why}" for seed, why in broken)
+
+
 def test_R6_2_a_file_without_a_header_row_names_the_file(tmp_path: Path) -> None:
     """The sniffer's 'no header row found' did not say which file (several inputs per dataset)."""
     with pytest.raises(MappingError, match=r"g\.csv: no header row found"):
-        read_any(garbage(13, tmp_path))
+        read_any(two_columns(tmp_path))
 
 
 def test_R6_2_a_saved_delimiter_of_more_than_one_byte_is_a_config_error(tmp_path: Path) -> None:
@@ -88,14 +160,12 @@ def test_R6_2_a_saved_delimiter_of_more_than_one_byte_is_a_config_error(tmp_path
 
 
 def test_R6_2_the_public_sniff_of_a_csv_has_the_same_guards_as_read_any(tmp_path: Path) -> None:
-    """Audit R6 low: `sniff(path)` returned a 2-byte delimiter (seed 7) and its 'no header row'
-    error did not name the file (seed 13); only read_any guarded."""
-    folder = tmp_path / "a"
-    folder.mkdir()
+    """Audit R6 low: `sniff(path)` returned a 2-byte delimiter and its 'no header row' error did
+    not name the file; only read_any guarded."""
     with pytest.raises(MappingError, match=r"g\.csv: not a readable CSV.*sniffed delimiter"):
-        sniff(garbage(7, folder))
+        sniff(quoted_table(tmp_path, "§"))
     with pytest.raises(MappingError, match=r"g\.csv: no header row found"):
-        sniff(garbage(13, folder))
+        sniff(two_columns(tmp_path))
 
 
 # ------------------------------------------------------------------ R6.2b: corrupt parquet
@@ -135,3 +205,112 @@ def test_R6_2_a_parquet_with_a_nested_column_is_a_mapping_error(tmp_path: Path) 
     pl.DataFrame({"sku": ["A"], "tags": [[1, 2]]}).write_parquet(path)
     with pytest.raises(MappingError, match=r"nested\.parquet: not a readable Parquet file"):
         read_any(path)
+
+
+# ------------------------------------------------------------------ R6.2c: the csv module's limits
+TOO_LONG = 200_000  # characters in one line; csv.field_size_limit() is 131 072
+
+
+@pytest.mark.parametrize("fill", [b"\x00", b"a"], ids=["zero-filled", "one-letter"])
+def test_R6_2_a_line_over_the_csv_field_limit_is_a_mapping_error_naming_the_file(
+    fill: bytes, tmp_path: Path
+) -> None:
+    """Was: a raw `_csv.Error: field larger than field limit (131072)` (exit 1, no file name) for
+    a zero-filled file or a one-line export: every candidate delimiter split the line with csv."""
+    path = tmp_path / "g.csv"
+    path.write_bytes(fill * TOO_LONG)
+    for read in (sniff, read_any):
+        with pytest.raises(MappingError, match=r"g\.csv: no header row found") as e:
+            read(path)
+        assert e.value.exit_code == 2
+
+
+def test_R6_2_csv_sniffer_is_not_asked_about_a_line_over_the_csv_field_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The old csv.Sniffer (CPython up to 3.12.13) is quadratic on a quote-dense line: 210 kB took
+    103 s on 3.12.13, 0.07 s on 3.12.14. A line over the csv limit is no table: said at once."""
+
+    def refuse(self: csv.Sniffer, sample: str, delimiters: str | None = None) -> csv.Dialect:
+        raise AssertionError("csv.Sniffer was given a line over the csv field limit")
+
+    monkeypatch.setattr(csv.Sniffer, "sniff", refuse)
+    path = tmp_path / "g.csv"
+    path.write_text('@"a' * 70_000, encoding="utf-8")  # 210 kB, none of ; , TAB |
+    with pytest.raises(MappingError, match=r"g\.csv: no header row found"):
+        sniff(path)
+
+
+def test_R6_2_a_wide_header_is_still_split_on_its_real_delimiter() -> None:
+    """30 000 columns are one 200 kB cell for the candidate `,`: csv's limit must not end the
+    count that finds `;`."""
+    wide = ";".join(f"c{i}" for i in range(30_000))
+    assert detect_delimiter([wide, "1;2;3"]) == ";"
+
+
+@pytest.mark.parametrize("where", ["header", "data row"])
+def test_R6_2_a_cell_over_the_csv_field_limit_does_not_stop_a_valid_table(
+    where: str, tmp_path: Path
+) -> None:
+    """The limit is the csv module's: polars reads a 150 kB cell, so does the product."""
+    cell = "y" * 150_000
+    header = ["sku", "qty", cell if where == "header" else "name"]
+    rows = [["A", "1", "x"], ["B", "2", cell if where == "data row" else "y"], ["C", "3", "z"]]
+    path = tmp_path / "g.csv"
+    path.write_text("\n".join(";".join(r) for r in [header, *rows]) + "\n", encoding="utf-8")
+    assert sniff(path).delimiter == ";"
+    raw = read_any(path)
+    assert raw.columns == header
+    assert raw.df[header[2]].to_list() == [r[2] for r in rows]
+
+
+# ------------------------------------------------------------------ R6.2d: a saved header_row
+@pytest.mark.parametrize(
+    "content",
+    [b"", b"sku;qty;name\n", b"sku;qty;name", b"\n\n\n"],
+    ids=["empty", "one-line", "no-final-newline", "blank-lines"],
+)
+def test_R6_2_a_saved_header_row_past_the_end_of_a_csv_is_a_mapping_error_naming_the_file(
+    content: bytes, tmp_path: Path
+) -> None:
+    """Was: a raw `polars.exceptions.NoDataError: empty CSV` (exit 1), or with no final newline
+    the last line read as the header. A saved header_row skips the sniffer's 'no header row'
+    guard: an empty export read with the mapping of the last one."""
+    path = tmp_path / "g.csv"
+    path.write_bytes(content)
+    mapping = Mapping(dataset="sku_master", delimiter=";", header_row=5, columns={"sku": "sku"})
+    with pytest.raises(MappingError, match=r"g\.csv: nothing to read from header row 5") as e:
+        read_any(path, mapping=mapping)
+    assert e.value.exit_code == 2
+
+
+def test_R6_2_a_saved_header_row_past_the_end_of_a_sheet_is_a_mapping_error(tmp_path: Path) -> None:
+    """Was: a raw `IndexError: list index out of range` (exit 1), same cause as for a CSV."""
+    path = tmp_path / "g.xlsx"
+    book = xlsxwriter.Workbook(path)
+    book.add_worksheet().write_row(0, 0, ["sku", "qty", "name"])
+    book.close()
+    mapping = Mapping(dataset="sku_master", header_row=5, columns={"sku": "sku"})
+    with pytest.raises(MappingError, match=r"g\.xlsx: sheet 'Sheet1' has 1 row\(s\)") as e:
+        read_any(path, mapping=mapping)
+    assert e.value.exit_code == 2
+
+
+# ------------------------------------------------------------------ R6.2e: a regex-like header
+@pytest.mark.parametrize(
+    "name", ["^[$", "^a$", "^\x1cJ*{$"], ids=["invalid", "matches-a", "binary"]
+)
+def test_R6_2_a_header_cell_that_polars_reads_as_a_regex_is_a_mapping_error_naming_the_file(
+    name: str, tmp_path: Path
+) -> None:
+    """Was: a raw `polars.exceptions.InvalidOperationError: invalid regex in selector` or
+    `IndexError` (exit 1) out of the readers and the mapping, for a header cell that starts with ^
+    and ends with $ (rare: one random file in some tens of thousands); polars takes
+    `pl.col('^a$')` for a regex, so such a name selects another column or none."""
+    path = tmp_path / "g.csv"
+    path.write_bytes(codecs.BOM_UTF8 + f"sku;{name};a\nA; x ;p\nB;;q\n".encode())
+    with pytest.raises(
+        MappingError, match=r"g\.csv: header cell 2 starts with \^ and ends with \$"
+    ) as e:
+        read_any(path)  # the BOM fixes the encoding: a control character fools the sniffer
+    assert e.value.exit_code == 2

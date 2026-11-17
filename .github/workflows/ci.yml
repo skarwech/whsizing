@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:  # a new push cancels the run of the previous one on the same ref
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -34,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu
+      - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu fonts-liberation
       - run: uv sync --frozen --all-extras
       - name: tests with coverage (≥ 80 % on engine/ and finance/ [P])
         run: |
@@ -66,12 +69,12 @@ jobs:
           mkdir -p runs
           docker run --rm --entrypoint sh -e WHSIZING_SALT=ci-smoke -v "$PWD/runs:/app/runs" whsizing:ci \
             -c 'whsizing synth data/synth/profiles/ecom_mid.yaml && whsizing run-all project/example_project.yaml'
+      - uses: astral-sh/setup-uv@v6  # an isolated environment: a runner's system Python may refuse `pip install`
       - name: PDF and Excel exist and open
         run: |
           pdf=$(find runs -name 'report_*.pdf' | head -1); xlsx=$(find runs -name 'report_*.xlsx' | head -1)
           test -n "$pdf" && test -n "$xlsx"
-          pip install pypdf openpyxl
-          python -c "import sys, pypdf, openpyxl; pypdf.PdfReader(sys.argv[1]).pages[0]; openpyxl.load_workbook(sys.argv[2])" "$pdf" "$xlsx"
+          uv run --no-project --with pypdf --with openpyxl python -c "import sys, pypdf, openpyxl; pypdf.PdfReader(sys.argv[1]).pages[0]; openpyxl.load_workbook(sys.argv[2])" "$pdf" "$xlsx"
       - uses: actions/upload-artifact@v4
         with: {name: demo-report, path: runs/**/report/*}
 
@@ -81,7 +84,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu
+      - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu fonts-liberation
       - run: uv sync --frozen
       - name: C5 budgets (fail if exceeded by > 50 %)
         run: uv run pytest -m bench -q --junitxml=bench.xml
