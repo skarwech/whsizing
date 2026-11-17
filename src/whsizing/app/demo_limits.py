@@ -20,6 +20,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+import yaml
 from pydantic import TypeAdapter, ValidationError
 
 from whsizing.app import demo
@@ -144,6 +145,22 @@ def limit_problems(
         problems.append(("demo.limit.scenarios", {"max": MAX_SCENARIOS}))
     cards = cards[: MAX_SCENARIOS + 1]  # the count is refused above: do not walk a million cards
     return [*problems, *_override_problems(basis, cards, catalog), *_text_problems(basis, cards)]
+
+
+class _NoAliasLoader(yaml.SafeLoader):
+    """A SafeLoader that refuses aliases (`*name`): a few anchors expand to millions of values (a
+    200 KB paste took 7 s and 2.5 GB, and again at every rerun), and nothing a visitor types in
+    these boxes needs one."""
+
+    def compose_node(self, parent: Any, index: Any) -> Any:  # pyright: ignore[reportIncompatibleMethodOverride]
+        if self.check_event(yaml.events.AliasEvent):
+            raise yaml.YAMLError("an alias (*name) is not allowed in the public demo")
+        return super().compose_node(parent, index)  # pyright: ignore[reportUnknownMemberType]
+
+
+def parse_yaml(text: str) -> Any:
+    """`yaml.safe_load(text)`, without aliases in the public demo."""
+    return yaml.load(text, Loader=_NoAliasLoader) if demo.demo_only() else yaml.safe_load(text)
 
 
 def yaml_too_long(text: str) -> bool:

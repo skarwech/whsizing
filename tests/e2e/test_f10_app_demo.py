@@ -564,6 +564,8 @@ def test_T10_4_the_demo_bounds_the_shifts_and_the_free_text_of_the_form(
     assert not at.exception  # refused before the parse: no traceback, no 10 KB comment parsed
     yaml_box = {"name": "overrides", "max": demo_limits.MAX_YAML_CHARS}
     assert tr("demo.limit.text", "en", **yaml_box) in [e.value for e in at.error]
+    at.text_area(key=f"{key}.overrides").set_value("labor.packing_S: &a 55\nlabor.pick: *a").run()
+    assert not at.exception and any("alias" in e.value for e in at.error)  # a message, not a bomb
     assert state.stage(run) == "ingested"  # nothing was sized
 
 

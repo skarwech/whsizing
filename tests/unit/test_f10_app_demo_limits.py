@@ -30,6 +30,7 @@ from whsizing.app.demo_limits import (
     MAX_TEXT_CHARS,
     MAX_YAML_CHARS,
     limit_problems,
+    parse_yaml,
     scrub,
     yaml_too_long,
 )
@@ -220,6 +221,25 @@ def test_long_texts_are_listed_a_few_at_a_time_and_cards_over_the_count_are_not_
     cards = [{"id": f"S{i}", "name": long if i == MAX_SCENARIOS + 3 else "s"} for i in range(9)]
     problems = limit_problems({}, {"scenarios": cards}, catalog)
     assert keys(problems) == ["demo.limit.scenarios"]  # refused by its count: the rest is not read
+
+
+def test_the_demo_reads_yaml_without_aliases_the_full_app_with_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A few anchors multiply a small paste into millions of values: 200 KB took 7 s and 2.5 GB at
+    every rerun. Inside the size limit the multiplication is still there, so the demo refuses it."""
+    text = "a: &a [1, 2]\nb: *a\n"
+    monkeypatch.delenv(demo.DEMO_ENV, raising=False)
+    assert parse_yaml(text) == {"a": [1, 2], "b": [1, 2]}  # the full app: the user's machine
+    monkeypatch.setenv(demo.DEMO_ENV, "1")
+    with pytest.raises(yaml.YAMLError, match="alias"):
+        parse_yaml(text)
+    bomb = "a: &a [" + "1," * 2000 + "1]\n" + "".join(f"k{i}: *a\n" for i in range(600))
+    assert not yaml_too_long(bomb)  # it fits the size limit...
+    with pytest.raises(yaml.YAMLError, match="alias"):
+        parse_yaml(bomb)  # ...and is refused at its first alias
+    assert parse_yaml("a: [1, 2]\nb: {c: 3}\n") == {"a": [1, 2], "b": {"c": 3}}  # as before
+    assert parse_yaml("") is None
 
 
 def test_a_yaml_box_over_the_limit_is_refused_in_the_demo_only(
@@ -426,6 +446,36 @@ def test_exclusive_gives_up_with_a_busy_error_when_the_lock_stays_taken_and_leav
         thread.join()
     with calls.exclusive():  # not left taken by the one that gave up
         assert calls.call(lambda: None).stdout == ""
+
+
+def test_the_demos_own_lock_gives_up_busy_too_and_nothing_is_built_meanwhile(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The first visitor's build holds the demo's lock for its whole length: the ones behind it get
+    the busy message after `calls.WAIT_S`, not an unbounded wait (and then a second one)."""
+    monkeypatch.setattr(calls, "WAIT_S", 0.2)
+    monkeypatch.setenv(demo.SALT_ENV, "set")  # `ensure_salt` then changes nothing
+    taken, release = threading.Event(), threading.Event()
+
+    def holder() -> None:
+        with demo._held():  # pyright: ignore[reportPrivateUsage]
+            taken.set()
+            release.wait(5)
+
+    thread = threading.Thread(target=holder)
+    thread.start()
+    try:
+        assert taken.wait(5)
+        for visit in (demo.ensure_salt, lambda: demo.shared_run(tmp_path, ROOT / "catalog")):
+            began = time.perf_counter()
+            with pytest.raises(CliError) as busy:
+                visit()
+            assert busy.value.code == BUSY_CODE and 0.15 < time.perf_counter() - began < 3
+        assert list(tmp_path.iterdir()) == []  # the shared build did not start
+    finally:
+        release.set()
+        thread.join()
+    demo.ensure_salt()  # the lock was not left taken
 
 
 def test_the_busy_message_exists_in_both_languages() -> None:

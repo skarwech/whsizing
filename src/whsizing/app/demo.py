@@ -30,10 +30,13 @@ import shutil
 import tempfile
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from whsizing.app.calls import call, exclusive
+from whsizing.app import calls
+from whsizing.app.calls import BUSY_CODE, CliError, call, exclusive
 from whsizing.cli.data import ingest_cmd
 from whsizing.cli.sizing import compare_cmd, size_cmd
 from whsizing.errors import ConfigError
@@ -55,6 +58,21 @@ RUN_MAX_AGE_S = 3 * 3600  # [P] a visitor's demo run is deleted three hours afte
 MAX_RUNS = 30  # [P] and above this many demo runs the oldest go first (the shared one stays)
 
 _LOCK = threading.RLock()  # one data generation / shared build at a time
+
+
+@contextmanager
+def _held() -> Iterator[None]:
+    """`_LOCK` with the patience of a command (`calls.WAIT_S`): the first visitor's build holds it
+    for its whole length, and the ones behind it are told the server is busy instead of waiting
+    for as long as that build waits for the commands (the `CliError` is shown like theirs)."""
+    if not _LOCK.acquire(timeout=calls.WAIT_S):
+        raise CliError(BUSY_CODE, f"the demo has been busy for over {calls.WAIT_S:g} s")
+    try:
+        yield
+    finally:
+        _LOCK.release()
+
+
 _shared: Path | None = (
     None  # ponytail: per server process; a restart rebuilds it (about 10 s on a laptop)
 )
@@ -86,7 +104,7 @@ def ensure_salt() -> None:
     The data is synthetic, there is nothing to protect, but the ingest refuses to run without a
     salt (C2); a salt the deployer set (secrets, environment) is kept. Under the lock: two first
     visitors must not each plant a different salt, the datasets of one run would not join."""
-    with _LOCK:
+    with _held():
         if not os.environ.get(SALT_ENV):
             os.environ[SALT_ENV] = secrets.token_hex(16)
 
@@ -110,7 +128,7 @@ def ensure_data() -> Path:
     key = hashlib.sha256(profile.read_bytes()).hexdigest()[:8]
     out = work_dir() / f"data-{key}-{SEED}"
     done = out / ".complete"
-    with _LOCK:  # complete = the marker and the four files (a marker that outlived its files is
+    with _held():  # complete = the marker and the four files (a marker that outlived its files is
         # no marker: the next visit regenerates instead of failing until the process restarts)
         if not (done.is_file() and all((out / "csv_en" / f"{d}.csv").is_file() for d in DATASETS)):
             shutil.rmtree(out, ignore_errors=True)
@@ -239,7 +257,7 @@ def shared_run(runs: Path, catalog: Path) -> Path:
     `report/` and the timings to `manifest.json` (`report_cmd`), which is why the manifest is
     written atomically."""
     global _shared
-    with _LOCK:
+    with _held():
         run = _shared
         if run is None or not (run / "comparison" / "comparison.json").is_file():
             run = load_demo(runs)
