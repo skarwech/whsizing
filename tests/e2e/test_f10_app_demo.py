@@ -531,6 +531,42 @@ def test_T10_4_the_demo_names_the_limit_instead_of_freezing_on_a_huge_input(
     assert state.stage(run) == "ingested"  # nothing was sized
 
 
+@pytest.mark.slow
+def test_T10_4_the_demo_bounds_the_shifts_and_the_free_text_of_the_form(
+    demo_env: SimpleNamespace,
+) -> None:
+    """The second security review: 300 shifts of a few minutes took 34 s and 2.1 GB, a YAML box of
+    2 MB was parsed again on every rerun, and a 400 000 character client name cost 14 s of PDF
+    under the lock. The page names the limit, the Save button is refused, nothing runs."""
+    at = entry().run()
+    at.button(key="demo.load").click().run()
+    run = Path(at.session_state["run_dir"])
+    key = f"basis.{run.name}"
+    at.switch_page(BASIS_PAGE).run()
+    assert not at.exception and not at.error
+
+    at.number_input(key=f"{key}.operations.shifts_per_day").set_value(300).run()
+    shifts = {"name": "operations.shifts_per_day", "max": demo_limits.MAX_SHIFTS}
+    assert [e.value for e in at.error] == [tr("demo.limit.maximum", "en", **shifts)]
+    assert saves(at).disabled  # type: ignore[attr-defined]
+    at.number_input(key=f"{key}.operations.shifts_per_day").set_value(2).run()
+    assert not at.error
+
+    at.text_input(key=f"{key}.client").set_value("x" * 400_000).run()
+    named = {"name": "basis.client", "max": demo_limits.MAX_TEXT_CHARS}
+    assert [e.value for e in at.error] == [tr("demo.limit.text", "en", **named)]
+    assert saves(at).disabled  # type: ignore[attr-defined]
+    at.text_input(key=f"{key}.client").set_value("Acme").run()
+    assert not at.error
+
+    big = "labor.packing_S: 55\n" + "# " + "y" * demo_limits.MAX_YAML_CHARS
+    at.text_area(key=f"{key}.overrides").set_value(big).run()
+    assert not at.exception  # refused before the parse: no traceback, no 10 KB comment parsed
+    yaml_box = {"name": "overrides", "max": demo_limits.MAX_YAML_CHARS}
+    assert tr("demo.limit.text", "en", **yaml_box) in [e.value for e in at.error]
+    assert state.stage(run) == "ingested"  # nothing was sized
+
+
 HORIZON = {"name": "finance.horizon_years", "max": demo_limits.MAX_HORIZON_YEARS}
 
 

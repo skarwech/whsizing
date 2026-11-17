@@ -63,10 +63,11 @@ def test_T10_4_streamlit_config_turns_telemetry_off_and_only_the_full_app_allows
 ):
     """Streamlit serves its upload route whether or not a page has an uploader, and keeps what a
     client sends in memory: the shared config (read by the hosted demo, which takes no upload)
-    keeps a 1 MB cap, and `just app` (the full app, spec: 1024 MB) raises it."""
+    sets the cap to 0, which refuses every body (a cap of 1 kept 300 requests of 0.9 MB, +283 MB),
+    and `just app` (the full app, spec: 1024 MB) raises it."""
     config = tomllib.loads((ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert config["browser"]["gatherUsageStats"] is False
-    assert config["server"]["maxUploadSize"] <= 1
+    assert config["server"]["maxUploadSize"] == 0
     justfile = (ROOT / "justfile").read_text(encoding="utf-8")
     app_recipe = next(ln for ln in justfile.splitlines() if "streamlit run src/whsizing" in ln)
     assert "--server.maxUploadSize 1024" in app_recipe

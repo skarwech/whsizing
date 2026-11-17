@@ -109,7 +109,7 @@ safest data minimisation is a request that does not ask for the sensitive column
   page with an error** (the server still listens: start it with `--server.address 127.0.0.1`, as
   `just app` does; `WHSIZING_ALLOW_REMOTE=1` says an authenticating proxy is in front: a separate, deliberate
   step, C6). `just app` also passes `--server.maxUploadSize 1024`: the repository's
-  `.streamlit/config.toml` caps an upload at 1 MB, for the hosted demo, so a full app started
+  `.streamlit/config.toml` takes no upload (cap 0), for the hosted demo, so a full app started
   some other way (behind a proxy, say) needs that flag too for files of real size (page 1 says so
   when the cap is small; a typed path or `whsizing ingest` has no cap). The public demo (`streamlit_app.py`, `docs/DEPLOY_STREAMLIT.md`) is the one exception:
   synthetic data only, no upload, no typed server path; never put client data in a hosted copy. C2 step 5 asks for written consent before any external call on client data: no call

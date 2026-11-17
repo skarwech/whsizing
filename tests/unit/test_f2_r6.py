@@ -7,6 +7,7 @@ from __future__ import annotations
 import codecs
 import csv
 import random
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -17,7 +18,13 @@ import xlsxwriter
 from whsizing.errors import ConfigError, MappingError
 from whsizing.io import ingest, read_any, sniff
 from whsizing.io.readers import read_parquet_file
-from whsizing.io.sniff import detect_delimiter, split_lines
+from whsizing.io.sniff import (
+    DATE_SCAN_COLUMNS,
+    detect_date_format,
+    detect_delimiter,
+    detect_file_date_format,
+    split_lines,
+)
 from whsizing.schemas.ingest import Mapping
 from whsizing.schemas.manifest import SniffResult
 from whsizing.schemas.project import InputSpec
@@ -314,3 +321,46 @@ def test_R6_2_a_header_cell_that_polars_reads_as_a_regex_is_a_mapping_error_nami
     ) as e:
         read_any(path)  # the BOM fixes the encoding: a control character fools the sniffer
     assert e.value.exit_code == 2
+
+
+# ------------------------------------------------ R6.2f: the reader's own column, a very wide file
+@pytest.mark.parametrize("suffix", ["csv", "xlsx"])
+def test_R6_2_a_column_named_like_the_line_number_column_is_a_mapping_error_naming_the_file(
+    suffix: str, tmp_path: Path
+) -> None:
+    """Was: a raw `polars.exceptions.DuplicateError` (exit 1). `__source_row__` is the name the
+    readers keep for each row's line number, so a file that has such a column cannot be read."""
+    path = tmp_path / f"g.{suffix}"
+    if suffix == "csv":
+        path.write_text("sku;__source_row__;qty\nA;1;2\nB;3;4\n", encoding="utf-8")
+    else:
+        book = xlsxwriter.Workbook(path)
+        sheet = book.add_worksheet()
+        sheet.write_row(0, 0, ["sku", "__source_row__", "qty"])
+        sheet.write_row(1, 0, ["A", "1", "2"])
+        book.close()
+    with pytest.raises(MappingError, match=rf"g\.{suffix}: a column is named __source_row__") as e:
+        read_any(path)
+    assert e.value.exit_code == 2
+
+
+def test_R6_2_the_file_level_date_format_looks_at_the_first_columns_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A binary file read as a table of thousands of text columns took 3.3 ms per column in this
+    step (6 s for 80 kB, about a minute for a 200 kB line). The per-column parsing of the mapping
+    still reads every date column; this is the summary of the file."""
+    calls: list[int] = []
+
+    def counting(series: pl.Series) -> tuple[str | None, float]:
+        calls.append(1)
+        return detect_date_format(series)
+
+    # `whsizing.io.sniff` is the function the package re-exports: the module is in sys.modules
+    monkeypatch.setattr(sys.modules["whsizing.io.sniff"], "detect_date_format", counting)
+    text_only = [["word", "text"] for _ in range(1000)]
+    assert detect_file_date_format(text_only) is None
+    assert len(calls) == DATE_SCAN_COLUMNS
+    dated = [["word", "text"] for _ in range(1000)]
+    dated[3] = ["2025-03-01", "2025-03-02"]  # among the first columns: found as before
+    assert detect_file_date_format(dated) == "%Y-%m-%d"

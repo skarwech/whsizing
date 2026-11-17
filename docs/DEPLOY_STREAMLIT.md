@@ -33,7 +33,7 @@ the open app. In demo mode:
 | Commands | one at a time per server process (`calls._LOCK`) | same; one that waits more than 2 minutes behind another gives up with a "server busy" message |
 | Inputs | any | bounded, see below |
 | Unexpected errors | the traceback of the page | the type of the error only (`client.showErrorDetails = type`) |
-| Upload route | up to 1 GB (`just app` raises `server.maxUploadSize`) | 1 MB (`.streamlit/config.toml`): Streamlit serves the route even without an uploader |
+| Upload route | up to 1 GB (`just app` raises `server.maxUploadSize`) | none: `.streamlit/config.toml` sets `server.maxUploadSize = 0`, so every body is refused (413). Streamlit serves the route even without an uploader and keeps what it takes in memory: with a cap of 1 MB, 300 requests of 0.9 MB were kept (+283 MB) |
 
 Why uploads are off: the specification (C2) keeps client data on the team's machines, and a hosted
 demo is somebody else's server. Do not put real client data in a deployed copy.
@@ -51,6 +51,11 @@ full app have no such limits):
 | number of scenarios | at most 6 | 30 scenarios: 104 s in `compare`, 30 s for the PDF of 20 |
 | an override of a constant (`engine.max_equipment_count` and the other structural scalars) | not allowed | lifting the guard made the engine loop on 2.8 million packing stations |
 | an override of a parameter | inside the catalog's own range (`min` to `max`) | a packing rate 1000 times too low: the same queue |
+| `operations.shifts_per_day` | at most 4 | 300 shifts of a few minutes (the library only asks for one shift at least, and 24 hours in all): 34 s and 2.1 GB in `size` and `compare`; 1,000 shifts about 2 minutes and 4 GB |
+| a text: the client, the site, a scenario's id or name, an override's id | at most 200 characters (the demo's longest is 47); a YAML box of overrides at most 10,000 | a 2 MB box was parsed again at every rerun (5.7 s of CPU each, outside the locks); a 400,000-character client name made the PDF take 14 s under the lock |
+
+A number typed as text (`"0.000055"`, `1e-5`, which YAML reads as text) is checked like a number: the
+library reads it as one.
 
 Also: at most two heavy page computations at a time (`loaders.HEAVY_AT_ONCE`: eight at once took
 the process from 0.9 to 2.8 GB), and the messages a visitor sees show `<runs>` where the server's
@@ -91,7 +96,7 @@ What the platform reads from the repository, and why:
 | `uv.lock` + `pyproject.toml` | the dependencies, pinned. Community Cloud takes the first dependency file it finds in this order: `uv.lock`, `Pipfile`, `environment.yml`, `requirements.txt`, `pyproject.toml`; do not add a second dependency file. The `app` group (Streamlit) is a default group, so a plain `uv sync` installs it. |
 | `packages.txt` | Debian packages for the PDF report (WeasyPrint needs Pango): `libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0` (the list of the WeasyPrint documentation for Debian) and fonts; `tzdata`, the time-zone database that ingestion reads (a no-op where the image has it). Without the Pango packages the app still runs and the PDF button shows an error instead of crashing. |
 | `streamlit_app.py` | the entry point. It makes `src/` importable when the platform installs the dependencies without the project itself. |
-| `.streamlit/config.toml` | telemetry off, a 1 MB upload cap (the hosted demo takes no upload; `just app` passes `--server.maxUploadSize 1024`). No `server.address`: it would stop the platform from reaching the app. |
+| `.streamlit/config.toml` | telemetry off, an upload cap of 0 (the hosted demo takes no upload; `just app` passes `--server.maxUploadSize 1024`). No `server.address`: it would stop the platform from reaching the app. |
 | `catalog/`, `basis/demo_basis.yaml`, `scenarios/demo_scenarios.yaml`, `data/synth/profiles/demo.yaml` | what the demo reads. Community Cloud starts the app from the root of the repository, which is where they are looked for. |
 
 Limits of the platform to keep in mind (from its documentation at the time of writing: check it):

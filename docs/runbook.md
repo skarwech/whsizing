@@ -592,7 +592,7 @@ just demo-app                        # the public demo: synthetic data only, no 
 ```
 
 Run it **from the repository root** so `.streamlit/config.toml` applies (usage statistics off; the
-recipe passes `--server.maxUploadSize 1024`, the config itself keeps a 1 MB cap for the hosted demo;
+recipe passes `--server.maxUploadSize 1024`, the config itself sets the cap to 0 for the hosted demo;
 larger files: use the CLI). The full app has no authentication: unless
 Streamlit's `server.address` is `127.0.0.1` (`just app` sets it) or `WHSIZING_ALLOW_REMOTE=1` is
 set, every page answers with an error instead of the app. `streamlit_app.py` is the demo that is deployed on Streamlit

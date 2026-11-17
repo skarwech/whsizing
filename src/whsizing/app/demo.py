@@ -190,14 +190,17 @@ def load_demo(runs: Path) -> Path:
                 salt_file=salt_file,
             )
             run = Path(done.last_line)
+            if dataset == DATASETS[0]:
+                # `?run=<name>` opens any marked demo run, so the name is the visitor's key to
+                # theirs. The stock name is a second and six hex digits that every demo run
+                # shares (the site and the seed are public): the folder gets its own name before
+                # it is first marked, and is never reachable under the stock one.
+                run = run.rename(run.with_name(f"{run.name}-{secrets.token_hex(8)}"))
             mark(run)
     finally:
         if salt_file is not None:
             salt_file.unlink(missing_ok=True)
     assert run is not None
-    # `?run=<name>` opens any demo run, so the name is the visitor's key to theirs: the stock name
-    # is a second and six hex digits that every demo run shares (the site and the seed are public)
-    run = run.rename(run.with_name(f"{run.name}-{secrets.token_hex(8)}"))
     drafts = run / "ui"
     drafts.mkdir(exist_ok=True)
     for name, source in (("basis", BASIS), ("scenarios", SCENARIOS)):

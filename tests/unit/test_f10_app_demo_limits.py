@@ -21,7 +21,16 @@ import yaml
 
 from whsizing.app import calls, demo, demo_limits, loaders
 from whsizing.app.calls import BUSY_CODE, CliError
-from whsizing.app.demo_limits import MAX_HORIZON_YEARS, MAX_SCENARIOS, limit_problems, scrub
+from whsizing.app.demo_limits import (
+    MAX_HORIZON_YEARS,
+    MAX_SCENARIOS,
+    MAX_SHIFTS,
+    MAX_TEXT_CHARS,
+    MAX_YAML_CHARS,
+    limit_problems,
+    scrub,
+    yaml_too_long,
+)
 from whsizing.app.strings import UI, tr
 from whsizing.catalog import Catalog, load_catalog
 
@@ -146,6 +155,60 @@ def test_a_horizon_typed_as_text_is_checked_like_a_number(
     )
 
 
+@pytest.mark.parametrize(("shifts", "refused"), [(MAX_SHIFTS, False), (MAX_SHIFTS + 1, True)])
+@pytest.mark.parametrize("as_text", [False, True])
+def test_shifts_per_day_stop_at_the_limit_whatever_their_hours(
+    public: None, catalog: Catalog, shifts: int, refused: bool, as_text: bool
+) -> None:
+    """300 shifts of a few minutes (the sum of the hours stays under 24) took 34 s and 2.1 GB: the
+    loops of the engine go over the shifts, and the library only asks for at least one."""
+    value: int | str = str(shifts) if as_text else shifts
+    basis = {"operations": {"shifts_per_day": value, "hours_per_shift": 0.01}}
+    assert limit_problems(basis, {}, catalog) == (
+        [("demo.limit.maximum", {"name": "operations.shifts_per_day", "max": MAX_SHIFTS})]
+        if refused
+        else []
+    )
+
+
+def test_a_text_over_the_limit_is_refused_wherever_it_sits(public: None, catalog: Catalog) -> None:
+    """A name reaches the PDF (25 s per MB under the lock), the messages and the drafts."""
+    long = "x" * (MAX_TEXT_CHARS + 1)
+    assert limit_problems({"client": "x" * MAX_TEXT_CHARS}, {}, catalog) == []  # the limit is ok
+    assert limit_problems({"client": long}, {}, catalog) == [
+        ("demo.limit.text", {"name": "basis.client", "max": MAX_TEXT_CHARS})
+    ]
+    cards = {"scenarios": [{"id": "S0"}, {"id": "S1", "name": long}]}
+    assert limit_problems({}, cards, catalog) == [
+        ("demo.limit.text", {"name": "scenarios[1].name", "max": MAX_TEXT_CHARS})
+    ]
+    nested = {"overrides": {long: 1.0}, "building": {"notes": [{"deep": long}]}}
+    names = [values["name"] for _, values in limit_problems(nested, {}, catalog)]
+    assert names == ["basis.overrides.xxxxxxxxxxxxxxxxxxxx...", "basis.building.notes[0].deep"]
+
+
+def test_long_texts_are_listed_a_few_at_a_time_and_cards_over_the_count_are_not_walked(
+    public: None, catalog: Catalog
+) -> None:
+    long = "x" * (MAX_TEXT_CHARS + 1)
+    many = {f"field{i}": long for i in range(20)}
+    texts = [p for p in limit_problems(many, {}, catalog) if p[0] == "demo.limit.text"]
+    assert len(texts) == 3  # not one message per text
+    cards = [{"id": f"S{i}", "name": long if i == MAX_SCENARIOS + 3 else "s"} for i in range(9)]
+    problems = limit_problems({}, {"scenarios": cards}, catalog)
+    assert keys(problems) == ["demo.limit.scenarios"]  # refused by its count: the rest is not read
+
+
+def test_a_yaml_box_over_the_limit_is_refused_in_the_demo_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """It is parsed again on every rerun, in the visitor's own thread and outside the locks."""
+    monkeypatch.delenv(demo.DEMO_ENV, raising=False)
+    assert not yaml_too_long("x" * (10 * MAX_YAML_CHARS))  # the full app has no limit
+    monkeypatch.setenv(demo.DEMO_ENV, "1")
+    assert not yaml_too_long("x" * MAX_YAML_CHARS) and yaml_too_long("x" * (MAX_YAML_CHARS + 1))
+
+
 def test_what_the_library_reports_itself_is_left_to_it(public: None, catalog: Catalog) -> None:
     """An unknown parameter id and a basis-level key are the library's to judge (ConfigError with
     a hint), and values that are no numbers are the schema's: the demo only adds its limits."""
@@ -162,6 +225,8 @@ def test_what_the_library_reports_itself_is_left_to_it(public: None, catalog: Ca
 
 def test_every_limit_has_its_text_in_both_languages(public: None, catalog: Catalog) -> None:
     basis = {
+        "client": "x" * (MAX_TEXT_CHARS + 1),
+        "operations": {"shifts_per_day": 99},
         "projection": {"horizon_years": 99},
         "overrides": {"engine.max_equipment_count": 1, "labor.packing_S": 1.0},
     }
@@ -169,8 +234,10 @@ def test_every_limit_has_its_text_in_both_languages(public: None, catalog: Catal
     assert sorted(keys(problems)) == [
         "demo.limit.constant",
         "demo.limit.horizon",
+        "demo.limit.maximum",
         "demo.limit.range",
         "demo.limit.scenarios",
+        "demo.limit.text",
     ]
     for key, values in problems:
         assert key in UI

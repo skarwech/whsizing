@@ -433,11 +433,11 @@ def test_T10_4_page_6_drilldown_depth_slider_changes_how_much_is_shown(stored_ru
 
 # ------------------------------------------------------------------------- the staged flow (UI)
 @pytest.mark.slow
-@pytest.mark.parametrize(("cap", "explained"), [(1, True), (200, False), (1024, False)])
+@pytest.mark.parametrize(("cap", "explained"), [(0, True), (1, True), (200, False), (1024, False)])
 def test_T10_4_the_upload_page_explains_a_small_upload_cap(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, cap: int, explained: bool
 ) -> None:
-    """`.streamlit/config.toml` caps uploads at 1 MB for the hosted demo: the full app, started
+    """`.streamlit/config.toml` takes no upload (cap 0) for the hosted demo: the full app, started
     without `just app`, says so and how to lift it, instead of leaving the user with the
     uploader's bare refusal of a file."""
     monkeypatch.setenv("WHSIZING_RUNS", str(tmp_path))

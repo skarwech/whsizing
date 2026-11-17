@@ -107,6 +107,15 @@ UI: dict[str, tuple[str, str]] = {
         "cette limite).",
         "Public demo: {name} cannot exceed {max} years (the local app has no such limit).",
     ),
+    "demo.limit.maximum": (
+        "Démo publique : {name} ne peut pas dépasser {max:g} (l'application locale n'a pas cette "
+        "limite).",
+        "Public demo: {name} cannot exceed {max:g} (the local app has no such limit).",
+    ),
+    "demo.limit.text": (
+        "Démo publique : {name} est un texte trop long ({max} caractères au plus).",
+        "Public demo: {name} is too long (at most {max} characters).",
+    ),
     "demo.limit.scenarios": (
         "Démo publique : {max} scénarios au plus.",
         "Public demo: at most {max} scenarios.",

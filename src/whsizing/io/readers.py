@@ -107,9 +107,20 @@ def _read_csv(path: Path, mapping: Mapping | None) -> RawTable:
         # a stray quote in an unquoted field (Ecran 24" LED): read again like the sniff does
         get_logger().warning("csv_lenient_quotes", file=path.name)
         df = _read_csv_lenient(path, body, delimiter)
-    df = df.with_row_index(SOURCE_ROW, offset=sn.header_row + 1)
+    df = _with_source_row(path, df, sn.header_row + 1)
     header = _fields(body.partition("\n")[0], delimiter)
     return _finish(path, df, sn, header)
+
+
+def _with_source_row(path: Path, df: pl.DataFrame, offset: int) -> pl.DataFrame:
+    """`df` with the column that keeps each row's line number in the file. A file with a column of
+    that very name cannot be read (polars refuses the duplicate): a MappingError, not a raw one."""
+    if SOURCE_ROW in df.columns:
+        raise MappingError(
+            f"{path.name}: a column is named {SOURCE_ROW}, the name this reader keeps for the "
+            "line number of each row; rename that column"
+        )
+    return df.with_row_index(SOURCE_ROW, offset=offset)
 
 
 def _read_csv_lenient(path: Path, body: str, delimiter: str) -> pl.DataFrame:
@@ -153,7 +164,7 @@ def _read_excel(path: Path, sheet: str | int | None, mapping: Mapping | None) ->
     names_row = [c.strip() if c else f"column_{j + 1}" for j, c in enumerate(rows[header])]
     df = frame.slice(header + 1)
     df = df.rename(dict(zip(df.columns, _unique(names_row), strict=True)))
-    df = df.with_row_index(SOURCE_ROW, offset=header + 2)
+    df = _with_source_row(path, df, header + 2)
     sn = SniffResult(
         encoding="binary",
         delimiter=None,
@@ -185,7 +196,7 @@ def _read_parquet(path: Path) -> RawTable:
                 as_text.append(pl.col(c).dt.strftime("%Y-%m-%d"))
             else:
                 as_text.append(pl.col(c).cast(pl.Utf8))
-        df = df.select(as_text).with_row_index(SOURCE_ROW, offset=1)
+        df = _with_source_row(path, df.select(as_text), 1)
     except (pl.exceptions.PolarsError, pl.exceptions.PanicException) as e:
         # truncated / empty / corrupt file (a pyo3 panic is not a PolarsError), or a nested column
         raise MappingError(f"{path.name}: not a readable Parquet file: {e}") from e

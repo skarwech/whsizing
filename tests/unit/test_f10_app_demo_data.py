@@ -281,8 +281,10 @@ def test_a_load_that_fails_midway_cleans_up_its_salt_and_leaves_a_run_the_prunin
         demo.load_demo(runs)
     assert len(salt_files) == 2 and salt_files[0] == salt_files[1]
     assert not salt_files[0].exists() and list(scratch.iterdir()) == []
-    assert demo.is_demo_run(half) and not demo.is_shared(half)
-    assert demo.prune(runs, now=time.time() + demo.RUN_MAX_AGE_S + 1) == [half]
+    (left,) = [p for p in runs.iterdir() if p.is_dir()]  # renamed after the first dataset: the
+    assert left.name.startswith(f"{half.name}-")  # stock name is never reachable (see below)
+    assert demo.is_demo_run(left) and not demo.is_shared(left)
+    assert demo.prune(runs, now=time.time() + demo.RUN_MAX_AGE_S + 1) == [left]
 
 
 # ------------------------------------------------------------------- the commands are serial
@@ -389,6 +391,32 @@ def test_a_visitors_own_run_has_the_data_and_the_drafts_pages_4_and_5_start_from
     assert restored[state.BASIS]["client"].startswith("Demo")
     assert [s["id"] for s in restored[state.SCENARIOS]["scenarios"]] == ["S0", "S1", "S2"]
     assert (run / "dq" / "dq_report.json").is_file()
+
+
+@pytest.mark.slow
+def test_a_run_has_its_own_name_before_it_is_first_marked_so_the_stock_name_is_never_reachable(
+    built: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`?run=<name>` opens any marked demo run. The stock name is a second and six hex digits that
+    every demo run shares, so a visitor who polls it could open (and size) another visitor's
+    half-built run: the folder is renamed after the first dataset, before it is first marked."""
+    suffixed = re.compile(r"\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d_[0-9a-f]{6}-[0-9a-f]{16}")
+    seen: list[tuple[str, list[tuple[str, bool]]]] = []
+    real = demo.call
+
+    def spy(command: Any, **kwargs: Any) -> Any:
+        target = kwargs.get("run")
+        folders = [(p.name, demo.is_demo_run(p)) for p in built.runs.iterdir() if p.is_dir()]
+        seen.append(("first" if target is None else target.name, folders))
+        return real(command, **kwargs)
+
+    monkeypatch.setattr(demo, "call", spy)
+    run = demo.load_demo(built.runs)
+    assert len(seen) == len(demo.DATASETS) and suffixed.fullmatch(run.name)
+    for target, _ in seen[1:]:  # the datasets after the first go into the renamed folder
+        assert suffixed.fullmatch(target), target
+    for _, folders in seen:  # and no marked run ever carries a name every demo run shares
+        assert all(suffixed.fullmatch(name) for name, marked in folders if marked), folders
 
 
 @pytest.mark.slow

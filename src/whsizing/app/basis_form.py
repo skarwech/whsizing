@@ -19,6 +19,7 @@ import streamlit as st
 import yaml
 from pydantic import BaseModel, ValidationError
 
+from whsizing.app import demo_limits
 from whsizing.app.strings import section_title, tr
 from whsizing.catalog import Catalog, ParamSet
 from whsizing.design.basis import EXAMPLES, FIELDS, UNSET_IN_TEMPLATE, VERIFY
@@ -208,7 +209,7 @@ def _widget(leaf: Leaf, value: Any, key: str, lg: Lang) -> tuple[Any, str | None
         index = options.index(value) if value in options else 0
         return st.selectbox(label, options, index, key=key, help=help_), None
     if kind == "mapping":
-        return _mapping_widget(leaf, label, value, key, help_)
+        return _mapping_widget(leaf, label, value, key, help_, lg)
     if kind == "int":
         start = None if value is None else int(value)
         number = st.number_input(label, 0, value=start, step=1, key=key, help=help_)
@@ -223,11 +224,14 @@ def _widget(leaf: Leaf, value: Any, key: str, lg: Lang) -> tuple[Any, str | None
 
 
 def _mapping_widget(
-    leaf: Leaf, label: str, value: dict[str, Any] | None, key: str, help_: str | None
+    leaf: Leaf, label: str, value: dict[str, Any] | None, key: str, help_: str | None, lg: Lang
 ) -> tuple[Any, str | None]:
     """A mapping is edited as YAML (`role: value` lines)."""
     text = yaml.safe_dump(value or {}, sort_keys=False, allow_unicode=True).removeprefix("{}\n")
     edited = st.text_area(label, text, key=key, help=help_)
+    if demo_limits.yaml_too_long(edited):  # before the parse: it runs on every rerun
+        too_long = tr("demo.limit.text", lg, name=leaf.path, max=demo_limits.MAX_YAML_CHARS)
+        return value, too_long
     try:
         parsed = yaml.safe_load(edited) if edited.strip() else {}
     except yaml.YAMLError as e:

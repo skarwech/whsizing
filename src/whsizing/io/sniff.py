@@ -32,6 +32,7 @@ HEADER_MIN_TEXT_SHARE = 0.60  # [P] step 3
 DECIMAL_SAMPLE_ROWS = 2000
 DECIMAL_MIN_SHARE = 0.80  # [P] step 4
 DATE_MIN_SHARE = 0.50  # a column counts as a date column for the file-level date_format
+DATE_SCAN_COLUMNS = 200  # [P] the file-level date_format looks at this many columns (3 ms each)
 YYYYMMDD_MIN_SHARE = 0.98  # [P] step 5, for an all-digit column
 FALLBACK_ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")  # step 1, in order
 _TRUSTED = {"utf_8": "utf-8", "ascii": "utf-8", "cp1252": "cp1252"}
@@ -242,7 +243,7 @@ def detect_file_date_format(columns: list[list[str]]) -> str | None:
     first all-digit column that reads as %Y%m%d (≥ 98 % [P]). ponytail: Excel-serial columns
     are not named here, 5-digit integers 20000-60000 are indistinguishable from quantities at
     this level; per-column parsing (`mapping._typed`) still reads them."""
-    for col in columns:
+    for col in columns[:DATE_SCAN_COLUMNS]:
         if col and not all(is_numeric_text(v) for v in col):
             fmt, share = detect_date_format(pl.Series(col, dtype=pl.Utf8))
             if fmt and share >= DATE_MIN_SHARE:
