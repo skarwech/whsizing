@@ -1,0 +1,21 @@
+{{ m.h1(S.data, "newpage") }}
+<div class="pair">
+  {{ m.block(g("data_quality", "dq_score")) }}
+  {{ m.block(g("data_quality", "dq_coverage")) }}
+</div>
+{{ m.figure(charts.daily) }}
+{{ m.figure(charts.seasonality) }}
+<div class="pair">
+  {{ m.block(g("demand_profile", "profile_eiq")) }}
+</div>
+<div class="pair">
+  {{ m.block(g("demand_profile", "profile_order_classes")) }}
+  {{ m.block(g("demand_profile", "profile_split")) }}
+</div>
+{{ m.figure(charts.pareto) }}
+<div class="triple">
+  {{ m.block(g("demand_profile", "profile_abc_lines")) }}
+  {{ m.block(g("demand_profile", "profile_abc_cube_movement")) }}
+  {{ m.block(g("demand_profile", "profile_abc_stock_cube")) }}
+</div>
+{{ m.figure(charts.split, "short") }}

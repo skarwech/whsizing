@@ -1,0 +1,17 @@
+# Engine defaults: [P] constants of F4/F5/F6 that the spec gives a value for but no catalog file.
+# Ids: engine.<name>. Each line cites the spec line (description.md) it comes from.
+eta_flow: 0.85                        # [P] F6b line 930: λ = peak_hour_lines / η_flow
+receipt_lines_per_pallet_full: 1.0    # [P] F4 line 766: derived inbound, full pallets
+receipt_lines_per_pallet_mixed: 4     # [P] F4 line 766: derived inbound, mixed pallets
+core_day_percentile: 50               # [P] F6c line 979: core heads = heads at the P50 day
+sla_wait_threshold_share: 0.5         # [P] F6e line 1023: t = sla_window_hours × 0.5
+sla_risk_max_probability: 0.05        # [P] F6e line 1023: F_SLA_RISK if P(W > t) > 5 %
+elig_low_line_share: 0.5              # [P] F5 line 860, F6 line 1042: F_ELIG_LOW below 50 % of lines
+# [P] I85 (b): plausibility bound on any sized equipment count (pickers, forklifts, carts, stations, ports,
+# robots, pack stations, pods). Above it the scenario raises SizingInfeasibleError (units or an outlier such
+# as quantity 1e12, R13) instead of running for minutes in the Erlang-C loop. No spec value; a scalar, not a Param.
+max_equipment_count: 100000
+# [P] F6d line 991: pack_stations = ceil(peak_hour_orders / (pack_rate × oee)); the spec never values
+# this oee. Analog of amr_gtp.oee (Appendix C.2, line 1655) until the [EXPERT] sets it.
+# pack_rate = labor.packing_S / labor.packing_ML (orders/h by class).
+pack_station_oee: {id: engine.pack_station_oee, unit: "-", min: 0.75, typ: 0.85, max: 0.90, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11, note: "no spec value; analog of amr_gtp.oee"}

@@ -1,0 +1,9 @@
+# Storage class assignment. Spec Appendix D (description.md lines 1688-1696), F6a. [P] [EXPERT].
+pallet_threshold_m3: 0.6              # design stock cube at or above → pallet rack
+shelf_bin_net_cube_m3: 0.040
+max_bins_per_sku_shelf: 6
+shelf_item_max_mm: [500, 400, 350]
+mixed_bins_allowed: true
+skus_per_mixed_bin: 4
+mixed_bin_threshold_share: 0.2
+default_units_per_pallet: 400        # fallback when case/pallet data is missing (flagged)

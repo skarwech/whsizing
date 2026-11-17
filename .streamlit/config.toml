@@ -1,0 +1,7 @@
+# whsizing Streamlit wrapper (F10b): client data stays on this machine.
+[browser]
+gatherUsageStats = false  # no telemetry
+
+[server]
+address = "127.0.0.1"   # loopback only: the app has no authentication (local use, C2 / hosting = local)
+maxUploadSize = 1024      # MB; larger files: use `whsizing ingest` (the CLI)

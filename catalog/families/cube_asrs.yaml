@@ -1,0 +1,58 @@
+# Family S2: cube AS/RS with ports. Spec F5 catalog file schema (description.md lines 791-836).
+# All values are [P] [EXPERT] placeholders (spec Appendix C / F5 schema), verbatim; ranges are full
+# Param blocks (source TODO, confidence L). Ids: catalog/README.md. Changes: catalog/CHANGELOG.md.
+id: cube_asrs                      # FamilyId
+title: {fr: "AS/RS cube à ports", en: "Cube AS/RS with ports"}
+version: 0.2.0
+description: {fr: "Grille de bacs empilés, robots sur le dessus, préparation aux ports.", en: "Grid of stacked bins, robots on top, picking at ports."}
+constraints:
+  max_item_mm: [600, 400, 300]     # [P] sorted L ≥ W ≥ H, compared orientation-agnostic
+  max_weight_kg: 25                # [P]
+  excludes_hazmat: true
+  temperature_classes: [ambient, chilled]
+  min_scale_lines_day: 1500        # [P] below this the family is flagged F_SCALE_LOW
+storage:
+  bin_dims_mm: [600, 400, 330]     # [P] external
+  bin_net_cube_m3: 0.055           # [P]
+  bins_per_m2_per_level: {id: cube_asrs.bins_per_m2_per_level, unit: "1/m2", min: 2.6, typ: 3.0, max: 3.4, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  level_height_mm: 330
+  grid_overhead_m: 1.2             # [P] structure + robots on top
+  max_levels: 20
+  fill_factor: {id: cube_asrs.fill_factor, unit: "-", min: 0.80, typ: 0.88, max: 0.92, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  empty_bin_reserve: 0.05
+throughput:
+  port_rate_lines_h: {id: cube_asrs.port_rate_lines_h, unit: "lines/h", min: 250, typ: 350, max: 450, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  oee: {id: cube_asrs.oee, unit: "-", min: 0.75, typ: 0.85, max: 0.9, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  lines_per_bin_presentation: {id: cube_asrs.lines_per_bin_presentation, unit: "-", min: 1.0, typ: 1.3, max: 1.8, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  dig_factor: {id: cube_asrs.dig_factor, unit: "-", min: 1.3, typ: 1.6, max: 2.0, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  robot_bins_per_h: {id: cube_asrs.robot_bins_per_h, unit: "bins/h", min: 15, typ: 22, max: 30, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  robot_availability: {id: cube_asrs.robot_availability, unit: "-", min: 0.9, typ: 0.95, max: 0.98, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  decant_cases_per_h: {id: cube_asrs.decant_cases_per_h, unit: "cases/h", min: 60, typ: 90, max: 120, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  # [P] F5 family table (description.md line 847): "max robots per m² of grid [P]", no spec value.
+  # Analog of amr_gtp.max_robots_per_m2 (Appendix C.2, line 1661: scalar 0.05) until the [EXPERT] sets it.
+  max_robots_per_m2: {id: cube_asrs.max_robots_per_m2, unit: "robots/m2", min: 0.05, typ: 0.05, max: 0.05, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11, note: "no spec value; analog of amr_gtp.max_robots_per_m2"}
+area:
+  m2_per_port: {id: cube_asrs.m2_per_port, unit: "m2", min: 15, typ: 20, max: 25, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  service_aisle_share: 0.08
+  # [P] F6d (line 995): equipment area = robots × m2_per_robot_parking (2.0). typ from F6d; range is the
+  # analog of amr_gtp.m2_per_robot_parking (Appendix C.2, line 1664) until the [EXPERT] sets it.
+  m2_per_robot_parking: {id: cube_asrs.m2_per_robot_parking, unit: "m2", min: 1.5, typ: 2.0, max: 2.5, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11, note: "typ from F6d; range analog of amr_gtp.m2_per_robot_parking"}
+capex:
+  per_bin_eur: {id: cube_asrs.per_bin_eur, unit: "eur", min: 25, typ: 40, max: 60, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  grid_structure_per_m2_eur: {id: cube_asrs.grid_structure_per_m2_eur, unit: "eur/m2", min: 400, typ: 650, max: 900, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  per_robot_eur: {id: cube_asrs.per_robot_eur, unit: "eur", min: 25000, typ: 35000, max: 50000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  per_port_eur: {id: cube_asrs.per_port_eur, unit: "eur", min: 40000, typ: 60000, max: 90000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  controls_fixed_eur: {id: cube_asrs.controls_fixed_eur, unit: "eur", min: 100000, typ: 150000, max: 250000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  # [P] F7 capex table (line 1091): building works "+ floor preparation × A_grid", no spec value.
+  # Analog of amr_gtp.floor_prep_per_m2_eur (Appendix C.2, line 1670) until the [EXPERT] sets it.
+  floor_prep_per_m2_eur: {id: cube_asrs.floor_prep_per_m2_eur, unit: "eur/m2", min: 10, typ: 20, max: 40, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11, note: "no spec value; analog of amr_gtp.floor_prep_per_m2_eur"}
+  integration_share: 0.10
+  commissioning_share: 0.05
+  contingency_share: 0.10
+opex:
+  maintenance_share_of_equipment_capex: {id: cube_asrs.maintenance_share_of_equipment_capex, unit: "-", min: 0.03, typ: 0.05, max: 0.07, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  kwh_per_robot_year: {id: cube_asrs.kwh_per_robot_year, unit: "kWh", min: 800, typ: 1200, max: 1800, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  software_eur_year: {id: cube_asrs.software_eur_year, unit: "eur", min: 20000, typ: 40000, max: 80000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+life:
+  equipment_life_years: 12
+  renewal_share: 0.6

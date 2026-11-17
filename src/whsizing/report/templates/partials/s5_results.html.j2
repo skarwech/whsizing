@@ -1,0 +1,8 @@
+{{ m.h1(S.results) }}
+{{ m.block(g("scenarios", "equipment")) }}
+{{ m.figure(charts.fte) }}
+{{ m.block(g("fte", "heads")) }}
+{{ m.block(g("scenarios", "area")) }}
+<h3>{{ t("pdf.s5.diagrams") }}</h3>
+{% for sid, f in diagrams.items() %}{{ m.figure(f, "diagram") }}{% endfor %}
+{{ m.block(g("scenarios", "flags")) }}

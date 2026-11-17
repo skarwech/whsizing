@@ -1,0 +1,8 @@
+{{ m.h1(S.basis) }}
+{{ m.block(g("design_basis", "design_basis", drop=["note"], keep=basis_keep), "dense") }}
+<div class="pair">
+  {{ m.block(g("design_day", "dd_basics")) }}
+  {{ m.block(g("design_day", "dd_inbound")) }}
+</div>
+{{ m.block(g("design_day", "dd_metrics")) }}
+{{ m.figure(charts.hourly) }}

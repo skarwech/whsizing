@@ -1,0 +1,8 @@
+{{ m.h1(S.summary, "newpage") }}
+<div class="banner slim">{{ banner }}</div>
+{{ m.block(g("summary", "comparison"), "stack") }}
+<p class="note">{{ t("pdf.range_note") }}</p>
+<h2>{{ t("pdf.s1.messages") }}</h2>
+{{ m.bullets(messages) }}
+<h2>{{ t("pdf.s1.caveats") }}</h2>
+{{ m.bullets(caveats) }}

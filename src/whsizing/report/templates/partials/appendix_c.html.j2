@@ -1,0 +1,22 @@
+{{ m.h1(S.app_c) }}
+{{ m.block(g("methodology", "methodology_versions")) }}
+<h3>{{ t("pdf.appc.formulas") }}</h3>
+<pre class="formulas">{{ formulas }}</pre>
+<h3>{{ t("pdf.appc.trace") }}</h3>
+<p class="note">{{ t("pdf.appc.trace_intro") }}</p>
+{% for ti in trace %}
+<h4>{{ ti.sid }} · {{ ti.name }}</h4>
+<table class="trace">
+  <thead><tr><th>{{ t("pdf.trace.id") }}</th><th>{{ t("pdf.trace.value") }}</th><th>{{ t("pdf.trace.formula") }}</th><th>{{ t("pdf.trace.inputs") }}</th></tr></thead>
+  <tbody>
+  {% for i in ti.items %}
+  <tr>
+    <td class="id">{{ i.id }}{% if i.label %}<span class="lbl">{{ i.label }}</span>{% endif %}</td>
+    <td class="r">{{ i.value }}</td>
+    <td class="f">{{ i.formula }}</td>
+    <td class="in">{% if i.note %}{{ i.note }}{% endif %}{% for x in i.inputs %}<span class="inp">{{ x.text }}{% if x.value %} ({{ x.value }}){% endif %}</span>{% if not loop.last %}; {% endif %}{% endfor %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endfor %}

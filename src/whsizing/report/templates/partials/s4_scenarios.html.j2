@@ -1,0 +1,9 @@
+{{ m.h1(S.scenarios) }}
+{% for s in scen %}
+<div class="scen{{ ' off' if not s.computed }}" style="border-left: 2.5pt solid {{ s.colour }}">
+  <h3>{{ s.sid }} · {{ s.name }} <span class="fam">{{ s.family }}</span></h3>
+  <p>{{ s.description }}</p>
+  <p class="shares">{% if s.computed %}{{ t("pdf.s4.shares", eligible=s.eligible, overflow=s.overflow) }}{% else %}{{ t("pdf.not_computed", reason=s.reason) }}{% endif %}</p>
+</div>
+{% endfor %}
+{{ m.block(g("scenarios", "eligibility")) }}

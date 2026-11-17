@@ -1,0 +1,69 @@
+# whsizing design basis (Appendix E). Edit the values, keep the keys (unknown keys are
+# rejected). [P] = placeholder default, to confirm with the client; [CLIENT] = required
+# client value (example shown). Times are quoted strings: "15:00".
+client: "Client X"  # [CLIENT] client name
+site: "Lyon"  # [CLIENT] site name
+currency: "EUR"  # [P] currency
+timezone: "Europe/Paris"  # [P] timezone of the data
+
+operations:
+  operating_days_per_year: 250  # [P] operating days per year (d/yr)
+  shifts_per_day: 1  # [P] shifts per day
+  hours_per_shift: 7.0  # [P] hours per shift (h)
+  paid_hours_per_person_day: 7.0  # [P] paid hours per person-day (h)
+  annual_paid_hours_per_fte: 1607.0  # [P] [VERIFY] annual paid hours per FTE (French 35 h) (h/yr)
+  utilisation: 0.85  # [P] share of paid time on direct work
+  absenteeism: 0.06  # [P] absenteeism
+  pfd_allowance: 0.12  # [P] personal, fatigue and delay allowance
+
+service:
+  cutoff_time: "15:00"  # [CLIENT] order cutoff time (hh:mm)
+  carrier_departure_time: "18:30"  # [CLIENT] carrier departure time (hh:mm)
+  same_day_share: 0.0  # [P] share of lines shipped the same day
+  sla_window_hours: null  # [P] SLA window (null = departure − cutoff) (h)
+
+projection:
+  horizon_years: 5  # [P] sizing horizon (yr)
+  growth_rate: 0.03  # [P] annual volume growth (1/yr)
+  design_percentile: 95.0  # [P] design-day percentile (%)
+  peak_stock_factor: 1.15  # [P] peak stock / average stock
+  # trailing_months: 12  # [P] design-day window (unset: 24 if the history covers 24 months, else 12; warns under 12 calendar months) (months)
+
+flows:
+  returns_rate: 0.03  # [P] returned lines / shipped lines
+  inbound_mode: "derived"  # [P] inbound from receipts or derived
+  inbound_peak_factor: null  # [P] inbound peak factor (null = outbound peak-to-average in derived mode, 1.0 in receipts mode)
+  pallets_per_truck: 26  # [P] pallets per truck (pallets)
+  truck_dwell_hours: 1.0  # [P] truck dwell time at the dock (h)
+  dock_utilisation: 0.7  # [P] dock utilisation
+  pallet_order_weight_kg: 300  # [P] orders at or above ship as pallets (kg)
+  pallet_order_cube_m3: 0.6  # [P] orders at or above ship as pallets (m3)
+  parcel_max_weight_kg: 30  # [P] maximum parcel weight (kg)
+
+building:
+  area_m2: 12000  # [CLIENT] building area (m2)
+  clear_height_m: 10.5  # [CLIENT] clear height (m)
+  dock_doors_in: 4  # [CLIENT] inbound dock doors (doors)
+  dock_doors_out: 6  # [CLIENT] outbound dock doors (doors)
+  floor_load_t_m2: null  # [P] floor load (t/m2)
+  sprinklered: null  # [P] sprinklered
+  rent_eur_m2_year: 60.0  # [P] rent (eur/m2/yr)
+  rent_mode: "footprint"  # [P] rent basis: footprint, full_building or none
+
+finance:
+  discount_rate: 0.08  # [P] discount rate (1/yr)
+  horizon_years: 5  # [P] financial horizon (yr)
+  wage_inflation: 0.025  # [P] wage inflation (1/yr)
+  energy_inflation: 0.03  # [P] energy inflation (1/yr)
+  energy_price_eur_kwh: 0.18  # [P] energy price (eur/kWh)
+  labor_cost_eur_h: {"operator": 25.5, "forklift_driver": 27.8, "team_leader": 33.0}  # [CLIENT] loaded hourly cost per role (eur/h)
+  temp_premium: 0.15  # [P] premium on temporary labour hours
+  shift_premium: 0.0  # [P] shift premium
+
+baseline:
+  description: ""  # [P] current operation
+  actual_fte: null  # [P] actual FTE per activity (FTE)
+  actual_hours_month: null  # [P] actual hours per month per activity (h/month)
+  equipment: null  # [P] current equipment counts (units)
+
+overrides: {}  # [P] catalog parameter id → client value

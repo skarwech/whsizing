@@ -1,0 +1,13 @@
+# T5.1 malformed fixture: typo circulation_shar (unknown key)
+# Area budget factors. Spec Appendix D (description.md lines 1698-1709), F6d. [P] [EXPERT].
+m2_per_pallet_staged: 1.5
+staging_days: 1.0
+parcels_per_pallet_equiv: 40
+m2_per_return_line_day: 0.05
+returns_fixed_m2: 30
+maintenance_fixed_m2: 40
+m2_per_head_amenities: 4
+amenities_fixed_m2: 150
+circulation_shar: 0.25
+receiving_window_hours: 8
+peak_hour_share_inbound: 0.2          # F6b line 952 says 0.2 "if inbound is spread over a 5-hour window"; kept verbatim

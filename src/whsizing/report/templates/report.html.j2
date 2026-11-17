@@ -1,0 +1,34 @@
+{% import "partials/macros.html.j2" as m with context %}
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<title>{{ t("pdf.title") }} - {{ study.client }} - {{ run_id }}</title>
+<style>
+@page {
+  @top-left { content: "{{ header_left|css_str }}"; }
+  @top-right { content: "{{ header_right|css_str }}"; }
+  @bottom-left { content: "{{ footer_left|css_str }}"; }
+  @bottom-right { content: "{{ t('pdf.page') }} " counter(page) " / " counter(pages); }
+}
+@page :first {
+  @top-left { content: none; }
+  @top-right { content: none; }
+}
+</style>
+</head>
+<body{% if compact %} class="compact compact{{ compact }}"{% endif %}>
+{% include "partials/cover.html.j2" %}
+{% include "partials/s1_summary.html.j2" %}
+{% include "partials/s2_data.html.j2" %}
+{% include "partials/s3_basis.html.j2" %}
+{% include "partials/s4_scenarios.html.j2" %}
+{% include "partials/s5_results.html.j2" %}
+{% include "partials/s6_business.html.j2" %}
+{% include "partials/s7_sensitivity.html.j2" %}
+{% include "partials/s8_risks.html.j2" %}
+{% include "partials/appendix_a.html.j2" %}
+{% include "partials/appendix_b.html.j2" %}
+{% include "partials/appendix_c.html.j2" %}
+</body>
+</html>

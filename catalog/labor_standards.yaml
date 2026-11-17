@@ -1,0 +1,20 @@
+# Labor standards. Spec Appendix D (description.md lines 1711-1728), F6c. [P] [EXPERT] placeholders,
+# verbatim; ranges are full Param blocks. Id of activities.<a>.standard = labor.<a> (catalog/README.md).
+# `standard: family.<name>` refers to the scenario family's own rate (decant, pick/station/port rate).
+roles: {operator: operator, forklift: forklift_driver, lead: team_leader}
+activities:
+  receiving:       {driver: pallets_in,    standard: {id: labor.receiving, unit: "pallets/h", min: 10, typ: 14, max: 18, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}, role: forklift}
+  receipt_check:   {driver: receipt_lines, standard: {id: labor.receipt_check, unit: "lines/h", min: 30, typ: 45, max: 60, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}, role: operator}
+  put_away:        {driver: pallets_in,    standard: {id: labor.put_away, unit: "pallets/h", min: 10, typ: 13, max: 16, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}, role: forklift}
+  decant:          {driver: cases_in,      standard: family.decant_cases_per_h, role: operator}
+  replenishment:   {driver: replen_moves,  standard: {id: labor.replenishment, unit: "moves/h", min: 10, typ: 14, max: 18, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}, role: forklift}
+  picking:         {driver: lines,         standard: family.pick_or_station_rate, role: operator}
+  packing_S:       {driver: orders_S,      standard: {id: labor.packing_S, unit: "orders/h", min: 40, typ: 55, max: 70, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}, role: operator}
+  packing_ML:      {driver: orders_ML,     standard: {id: labor.packing_ML, unit: "orders/h", min: 18, typ: 25, max: 32, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}, role: operator}
+  shipping_parcel: {driver: parcels,       standard: {id: labor.shipping_parcel, unit: "parcels/h", min: 80, typ: 110, max: 140, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}, role: operator}
+  shipping_pallet: {driver: pallets_out,   standard: {id: labor.shipping_pallet, unit: "pallets/h", min: 10, typ: 14, max: 18, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}, role: forklift}
+  returns:         {driver: return_lines,  standard: {id: labor.returns, unit: "lines/h", min: 15, typ: 22, max: 30, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}, role: operator}
+  indirect:        {share_of_direct_hours: 0.12, role: lead}   # [P] F6c line 968
+profiles:
+  outbound_lag_hours: 1.0              # [P] F6c line 973
+  inbound_window: ["06:00", "14:00"]   # [P] F6c line 974; quoted (unquoted 06:00 is base-60 in YAML 1.1)

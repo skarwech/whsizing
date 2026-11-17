@@ -1,0 +1,69 @@
+# Base de conception whsizing (annexe E). Modifier les valeurs, garder les clés (une clé
+# inconnue est refusée). [P] = valeur par défaut provisoire, à confirmer avec le client ;
+# [CLIENT] = valeur client obligatoire (exemple). Heures entre guillemets : "15:00".
+client: "Client X"  # [CLIENT] nom du client
+site: "Lyon"  # [CLIENT] nom du site
+currency: "EUR"  # [P] devise
+timezone: "Europe/Paris"  # [P] fuseau horaire des données
+
+operations:
+  operating_days_per_year: 250  # [P] jours ouvrés par an (d/yr)
+  shifts_per_day: 1  # [P] équipes par jour
+  hours_per_shift: 7.0  # [P] heures par équipe (h)
+  paid_hours_per_person_day: 7.0  # [P] heures payées par personne-jour (h)
+  annual_paid_hours_per_fte: 1607.0  # [P] [VERIFY] heures payées annuelles par ETP (35 h) (h/yr)
+  utilisation: 0.85  # [P] part du temps payé en travail direct
+  absenteeism: 0.06  # [P] absentéisme
+  pfd_allowance: 0.12  # [P] majoration repos, fatigue, aléas
+
+service:
+  cutoff_time: "15:00"  # [CLIENT] heure limite de commande (hh:mm)
+  carrier_departure_time: "18:30"  # [CLIENT] heure de départ transporteur (hh:mm)
+  same_day_share: 0.0  # [P] part des lignes expédiées le jour même
+  sla_window_hours: null  # [P] fenêtre SLA (null = départ − heure limite) (h)
+
+projection:
+  horizon_years: 5  # [P] horizon de dimensionnement (yr)
+  growth_rate: 0.03  # [P] croissance annuelle des volumes (1/yr)
+  design_percentile: 95.0  # [P] percentile du jour de conception (%)
+  peak_stock_factor: 1.15  # [P] stock de pointe / stock moyen
+  # trailing_months: 12  # [P] fenêtre du jour de conception (absente : 24 si l'historique couvre 24 mois, sinon 12 ; alerte sous 12 mois calendaires) (months)
+
+flows:
+  returns_rate: 0.03  # [P] lignes retournées / lignes expédiées
+  inbound_mode: "derived"  # [P] réception : réceptions ou dérivée
+  inbound_peak_factor: null  # [P] facteur de pointe réception (null = pointe/moyenne sortie en mode dérivé, 1,0 en mode réceptions)
+  pallets_per_truck: 26  # [P] palettes par camion (pallets)
+  truck_dwell_hours: 1.0  # [P] temps de quai par camion (h)
+  dock_utilisation: 0.7  # [P] taux d'occupation des quais
+  pallet_order_weight_kg: 300  # [P] commandes expédiées en palette au-delà de (kg)
+  pallet_order_cube_m3: 0.6  # [P] commandes expédiées en palette au-delà de (m3)
+  parcel_max_weight_kg: 30  # [P] poids maximal d'un colis (kg)
+
+building:
+  area_m2: 12000  # [CLIENT] surface du bâtiment (m2)
+  clear_height_m: 10.5  # [CLIENT] hauteur libre (m)
+  dock_doors_in: 4  # [CLIENT] quais de réception (doors)
+  dock_doors_out: 6  # [CLIENT] quais d'expédition (doors)
+  floor_load_t_m2: null  # [P] charge au sol (t/m2)
+  sprinklered: null  # [P] sprinklé
+  rent_eur_m2_year: 60.0  # [P] loyer (eur/m2/yr)
+  rent_mode: "footprint"  # [P] base du loyer : footprint, full_building ou none
+
+finance:
+  discount_rate: 0.08  # [P] taux d'actualisation (1/yr)
+  horizon_years: 5  # [P] horizon financier (yr)
+  wage_inflation: 0.025  # [P] inflation salariale (1/yr)
+  energy_inflation: 0.03  # [P] inflation de l'énergie (1/yr)
+  energy_price_eur_kwh: 0.18  # [P] prix de l'énergie (eur/kWh)
+  labor_cost_eur_h: {"operator": 25.5, "forklift_driver": 27.8, "team_leader": 33.0}  # [CLIENT] coût horaire chargé par rôle (eur/h)
+  temp_premium: 0.15  # [P] surcoût des heures intérimaires
+  shift_premium: 0.0  # [P] prime d'équipe
+
+baseline:
+  description: ""  # [P] fonctionnement actuel
+  actual_fte: null  # [P] ETP actuels par activité (FTE)
+  actual_hours_month: null  # [P] heures mensuelles réelles par activité (h/month)
+  equipment: null  # [P] équipements actuels (units)
+
+overrides: {}  # [P] id de paramètre catalogue → valeur client

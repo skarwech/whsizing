@@ -1,0 +1,29 @@
+# Synonym dictionary (Appendix F), normalised: no accents, lower case, punctuation → space.
+# Entries after the Appendix F excerpt are F2 additions (marked).
+order_id: [order id, order, order number, order no, commande, n commande, num commande, no commande,
+           numero commande, bl, order ref, reference commande]
+order_ts: [order date, order time, date, date commande, date de commande, created at, creation date,
+           date creation, timestamp, release date, date liberation]
+sku: [sku, item, item code, article, code article, reference, ref, product id, product code, ean,
+      gtin]
+qty_units: [qty, quantity, quantite, qte, units, nb pieces, pcs, pieces, qty shipped, qte expediee]
+channel: [channel, canal, customer type, type client, sales channel]
+line_status: [status, statut, etat, line status]
+length_mm: [length, longueur, long, l, len]
+width_mm: [width, largeur, larg, w]
+height_mm: [height, hauteur, haut, h]
+weight_kg: [weight, poids, poids unitaire, unit weight, kg]
+units_per_case: [pcb, units per case, colisage, uc par colis, case pack, pack size]
+cases_per_pallet: [cases per pallet, colis par palette, cartons par palette, pal]
+snapshot_date: [date stock, stock date, date inventaire, as of]
+receipt_id: [receipt, reception, asn, po, bon de reception]
+receipt_ts: [receipt date, date reception, delivered on]
+pallets: [pallets, palettes, nb palettes]
+# F2 additions: optional §4.1 columns absent from the Appendix F excerpt
+category: [category, categorie, famille, family, product family, famille produit]
+stackable: [stackable, gerbable, empilable]
+temperature_class: [temperature class, temperature, classe temperature, temp class]
+hazmat: [hazmat, dangerous goods, matiere dangereuse, adr, dg]
+# F2 additions: PII / free text, dropped at ingestion unless keep_descriptions
+description: [description, designation, libelle, libelle article, item description, product name]
+customer: [customer, client, customer id, code client, nom client, customer name]

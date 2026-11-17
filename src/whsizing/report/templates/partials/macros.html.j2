@@ -1,0 +1,44 @@
+{# F9c macros: a grid view (pdf_view.Grid) as a table, figures, headings. No prose here: texts come from t(). #}
+{% macro table(g, cls="") %}
+<table class="grid {{ cls }}">
+  <thead>
+  {% for hr in g.heads %}
+    <tr>
+      {% if loop.first %}<th class="lab" rowspan="{{ g.heads|length }}">{{ g.label_header }}</th>{% endif %}
+      {% for h in hr %}<th colspan="{{ h.span }}"{% if h.off %} class="off"{% endif %}{% if h.colour %} style="border-top: 2.5pt solid {{ h.colour }}"{% endif %}>{{ h.text }}{% if h.note %}<span class="reason">{{ t("pdf.not_computed", reason=h.note) }}</span>{% endif %}</th>{% endfor %}
+    </tr>
+  {% endfor %}
+  </thead>
+  <tbody>
+  {% for l in g.lines %}
+    {% if l.kind == "section" %}
+    <tr class="section"><th colspan="{{ g.width + 1 }}">{{ l.label }}</th></tr>
+    {% else %}
+    <tr class="{{ l.kind }}"><th class="lab" scope="row">{{ l.label }}</th>
+      {% for b in l.boxes %}<td class="{{ 'l' if b.left else 'r' }}{{ ' off' if b.off }}">{{ b.text }}{% if b.sub %}<span class="rng">{{ b.sub }}</span>{% endif %}</td>{% endfor %}
+    </tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+
+{# a table with more scenarios than `per` is cut into several, the label column repeating: `per` is
+   3 for ranges written inline (typ (lo - hi)), 4 for the stacked ones, 6 when set at level 2 #}
+{% macro block(g, cls="") %}
+{% for part in split(g, 3 if "stack" not in cls else (6 if compact > 1 else 4)) %}
+<section class="blk {{ cls }}">{% if part.title %}<h3>{{ part.title }}</h3>{% endif %}{{ table(part) }}</section>
+{% endfor %}
+{% endmacro %}
+
+{% macro figure(f, cls="") %}
+{% if f %}<figure class="{{ cls }}"><img src="{{ f.uri }}" alt="{{ f.alt }}"></figure>{% endif %}
+{% endmacro %}
+
+{% macro h1(s, cls="") %}
+<h1 id="{{ s.id }}" class="{{ cls }}">{% if s.num %}<span class="n">{{ s.num }}</span>{% endif %}{{ s.title }}</h1>
+{% endmacro %}
+
+{% macro bullets(items) %}
+<ul class="msg">{% for i in items %}<li>{{ i }}</li>{% endfor %}</ul>
+{% endmacro %}

@@ -1,0 +1,85 @@
+# §3.4: lint → typecheck → test (coverage) → docker-build → docker-smoke → bench
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+
+  typecheck:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --all-extras
+      - run: uv run pyright
+
+  test:
+    needs: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu
+      - run: uv sync --frozen --all-extras
+      - name: tests with coverage (≥ 80 % on engine/ and finance/ [P])
+        run: |
+          uv run pytest -m "not bench" --cov=whsizing --cov-report=xml --cov-report=term
+          uv run coverage report --include="src/whsizing/engine/*,src/whsizing/finance/*" --fail-under=80
+      - uses: actions/upload-artifact@v4
+        with: {name: coverage, path: coverage.xml}
+
+  docker-build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t whsizing:ci .
+      - run: docker save whsizing:ci -o whsizing.tar
+      - uses: actions/upload-artifact@v4
+        with: {name: image, path: whsizing.tar, retention-days: 1}
+
+  docker-smoke:
+    needs: docker-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {name: image}
+      - run: docker load -i whsizing.tar
+      - name: run-all inside the image
+        run: |
+          mkdir -p runs
+          docker run --rm --entrypoint sh -e WHSIZING_SALT=ci-smoke -v "$PWD/runs:/app/runs" whsizing:ci \
+            -c 'whsizing synth data/synth/profiles/ecom_mid.yaml && whsizing run-all project/example_project.yaml'
+      - name: PDF and Excel exist and open
+        run: |
+          pdf=$(find runs -name 'report_*.pdf' | head -1); xlsx=$(find runs -name 'report_*.xlsx' | head -1)
+          test -n "$pdf" && test -n "$xlsx"
+          pip install pypdf openpyxl
+          python -c "import sys, pypdf, openpyxl; pypdf.PdfReader(sys.argv[1]).pages[0]; openpyxl.load_workbook(sys.argv[2])" "$pdf" "$xlsx"
+      - uses: actions/upload-artifact@v4
+        with: {name: demo-report, path: runs/**/report/*}
+
+  bench:
+    needs: docker-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu
+      - run: uv sync --frozen
+      - name: C5 budgets (fail if exceeded by > 50 %)
+        run: uv run pytest -m bench -q --junitxml=bench.xml
+      - uses: actions/upload-artifact@v4
+        with: {name: bench, path: bench.xml}

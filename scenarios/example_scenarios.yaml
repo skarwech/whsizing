@@ -1,0 +1,10 @@
+# Appendix E scenarios.yaml: manual optimised, AMR goods-to-person, AS/RS cube.
+# Baseline: the client's current operation (basis.baseline); put a scenario id (e.g. S0) to compare
+# the automated scenarios with a sized manual one instead (I42).
+scenarios:
+  - {id: S0, name: "Manuel optimisé", family: manual_p2p, is_baseline: false}
+  - {id: S1, name: "AMR goods-to-person", family: amr_gtp,
+     overrides: {"amr_gtp.station_rate_lines_h": 230}}
+  - {id: S2, name: "AS/RS cube", family: cube_asrs,
+     eligibility: {assume_eligible_if_missing_dims: false}}
+baseline: client_current      # or a scenario id

@@ -1,0 +1,96 @@
+[project]
+name = "whsizing"
+version = "0.1.0"
+description = "Warehouse Sizing POC: demand profile, design day, scenario sizing, finance and traceable reports"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "polars",
+    "pyarrow",
+    "pandera[polars]",
+    "pydantic>=2",
+    "charset-normalizer",
+    "rapidfuzz",
+    "fastexcel",
+    "python-dateutil",
+    "holidays",
+    "numpy",
+    "scipy",
+    "numpy-financial",
+    "pint",
+    "pyyaml",
+    "typer",
+    "rich",
+    "matplotlib",
+    "plotly",
+    "jinja2",
+    "weasyprint",
+    "xlsxwriter",
+    "structlog",
+    "joblib",
+]
+
+[project.optional-dependencies]
+ui = ["streamlit"]
+
+[project.scripts]
+whsizing = "whsizing.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "hypothesis",
+    "syrupy",
+    "ruff",
+    "pyright",
+    "pre-commit",
+    "openpyxl",
+    "pypdf",
+]
+
+[build-system]
+requires = ["uv_build>=0.8,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+extend-exclude = ["description.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # spec uses ≤, ×, λ, é in strings and comments
+    "RUF012",  # pydantic copies mutable field defaults; ruff cannot see StrictModel is a BaseModel
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+include = ["src", "tests"]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+strict = ["src/whsizing/schemas", "src/whsizing/engine", "src/whsizing/finance"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+markers = [
+    "slow: long-running test (subprocesses, large data)",
+    "bench: performance budget test (C5), run with `just bench`",
+    "pdf: renders a PDF with WeasyPrint (skipped with a reason when Pango is missing)",
+]
+
+[tool.coverage.run]
+source = ["whsizing"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

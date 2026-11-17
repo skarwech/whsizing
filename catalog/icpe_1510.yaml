@@ -1,0 +1,7 @@
+# ICPE rubrique 1510. Spec Appendix D (description.md lines 1736-1741), F6d.
+# [VERIFY] informational only; regime depends on stored combustible volume and cell design
+regimes:
+  - {label: "Déclaration (D/DC)",  min_m3: 5000,   max_m3: 50000}
+  - {label: "Enregistrement (E)",  min_m3: 50000,  max_m3: 900000}
+  - {label: "Autorisation (A)",    min_m3: 900000, max_m3: null}
+note_fr: "Indicatif : classement selon le volume de l'entrepôt (rubrique 1510), à confirmer avec un bureau ICPE."

@@ -1,0 +1,65 @@
+# Golden case design basis (G1, T1.5): tiny_golden, DesignBasis per §2.5 / Appendix E.
+# Chosen so the golden numbers exercise the formulas (see docs/INTERPRETATIONS.md):
+# - growth 4 % over 5 years: (1+g)^T = 1.2167 is visible in every design quantity;
+# - clear height 8.5 m: pallet rack limited by the building (5 of 6 levels, F_HEIGHT_LIMIT),
+#   cube grid capped by the catalog (20 levels);
+# - hours_per_shift 7.5 ≠ paid_hours_per_person_day 7.0: roster (F6c shift heads) and design-day
+#   heads use different divisors, so a mix-up shows;
+# - 410 m2: S0 fits (≈ 399 m2), S2 does not (≈ 421 m2, F_NO_FIT with a deficit); both margins
+#   (≈ 2.7 %) exceed the T1.5 tolerance of 0.5 %, so area.fit cannot flip within tolerance;
+# - one shift: the oracle does not size multi-shift rosters (I19);
+# - shipment thresholds far below the [P] defaults (300 kg / 0.6 m3 / 30 kg) on purpose: no
+#   tiny_golden order exceeds 21.6 kg or 0.26 m3, so the defaults leave pallets_out, multi-parcel
+#   orders and shipping_pallet labor at zero (G1 audit L7). With 12 kg / 0.1 m3 / 5 kg: 39 pallet
+#   orders (25 by weight only, 14 by cube only), 2 on the reference day 2025-03-10; 128 orders of
+#   2 parcels and 13 of 3 parcels. Not realistic values: they exist to exercise F3 step 8.
+client: "Golden case"
+site: "tiny_golden"
+currency: EUR
+timezone: Europe/Paris
+operations:
+  operating_days_per_year: 252
+  shifts_per_day: 1
+  hours_per_shift: 7.5
+  paid_hours_per_person_day: 7.0
+  annual_paid_hours_per_fte: 1607
+  utilisation: 0.85
+  absenteeism: 0.06
+  pfd_allowance: 0.12
+service:
+  cutoff_time: "15:00"
+  carrier_departure_time: "18:30"
+  same_day_share: 0.6
+projection:
+  horizon_years: 5
+  growth_rate: 0.04
+  design_percentile: 95
+  peak_stock_factor: 1.15
+  trailing_months: 12
+flows:
+  returns_rate: 0.04
+  inbound_mode: derived
+  pallets_per_truck: 26
+  truck_dwell_hours: 1.0
+  dock_utilisation: 0.7
+  pallet_order_weight_kg: 12     # [P] default 300; see header
+  pallet_order_cube_m3: 0.1      # [P] default 0.6; see header
+  parcel_max_weight_kg: 5        # [P] default 30; see header
+building:
+  area_m2: 410
+  clear_height_m: 8.5
+  dock_doors_in: 1
+  dock_doors_out: 1
+  rent_eur_m2_year: 58
+  rent_mode: footprint
+finance:
+  discount_rate: 0.08
+  horizon_years: 5
+  wage_inflation: 0.025
+  energy_inflation: 0.03
+  energy_price_eur_kwh: 0.17
+  labor_cost_eur_h: {operator: 25.5, forklift_driver: 27.8, team_leader: 33.0}
+  temp_premium: 0.15
+  shift_premium: 0.0
+baseline:
+  description: "Scenario S0 (manual picker-to-parts) is the baseline"

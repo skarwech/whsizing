@@ -1,0 +1,9 @@
+{{ m.h1(S.business) }}
+{{ m.block(g("capex_opex", "capex")) }}
+{{ m.block(g("capex_opex", "totals")) }}
+{{ m.block(g("capex_opex", "opex_by_year", keep=opex_keep)) }}
+{% for n in capex_notes %}<p class="note">{{ n }}</p>{% endfor %}
+{{ m.figure(charts.tco) }}
+{{ m.figure(charts.cash) }}
+{{ m.block(g("cash_flow", "cash_flow"), "cash") }}
+{% for n in cash_notes %}<p class="note">{{ n }}</p>{% endfor %}

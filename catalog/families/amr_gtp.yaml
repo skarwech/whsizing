@@ -1,0 +1,48 @@
+# Family S1: AMR goods-to-person. Spec Appendix C.2 (description.md lines 1638-1678).
+# All values are [P] [EXPERT] placeholders (spec Appendix C / F5 schema), verbatim; ranges are full
+# Param blocks (source TODO, confidence L). Ids: catalog/README.md. Changes: catalog/CHANGELOG.md.
+id: amr_gtp
+title: {fr: "AMR goods-to-person (pods / bacs)", en: "AMR goods-to-person"}
+version: 0.2.0
+description: {fr: "Robots mobiles qui apportent des étagères de bacs aux postes de préparation.", en: "Mobile robots bring pods of bins to pick stations."}
+constraints:
+  max_item_mm: [600, 400, 400]
+  max_weight_kg: 20
+  excludes_hazmat: true
+  temperature_classes: [ambient]
+  min_scale_lines_day: 800
+storage:
+  bins_per_pod: {id: amr_gtp.bins_per_pod, unit: "-", min: 40, typ: 60, max: 90, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  pod_bin_net_cube_m3: 0.030
+  pod_footprint_m2: {id: amr_gtp.pod_footprint_m2, unit: "m2", min: 2.0, typ: 2.6, max: 3.2, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}                       # incl. robot aisles
+  fill_factor: {id: amr_gtp.fill_factor, unit: "-", min: 0.70, typ: 0.80, max: 0.88, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  empty_bin_reserve: 0.05
+throughput:
+  station_rate_lines_h: {id: amr_gtp.station_rate_lines_h, unit: "lines/h", min: 150, typ: 250, max: 350, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  oee: {id: amr_gtp.oee, unit: "-", min: 0.75, typ: 0.85, max: 0.90, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  lines_per_pod_visit: {id: amr_gtp.lines_per_pod_visit, unit: "-", min: 1.2, typ: 1.8, max: 2.5, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  robot_pod_moves_h: {id: amr_gtp.robot_pod_moves_h, unit: "moves/h", min: 8, typ: 12, max: 16, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  robot_availability: {id: amr_gtp.robot_availability, unit: "-", min: 0.88, typ: 0.94, max: 0.97, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  charging_reserve: 0.15
+  decant_cases_per_h: {id: amr_gtp.decant_cases_per_h, unit: "cases/h", min: 50, typ: 80, max: 110, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  max_robots_per_m2: 0.05
+area:
+  m2_per_station: {id: amr_gtp.m2_per_station, unit: "m2", min: 12, typ: 16, max: 20, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  m2_per_robot_parking: {id: amr_gtp.m2_per_robot_parking, unit: "m2", min: 1.5, typ: 2.0, max: 2.5, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+capex:
+  per_robot_eur: {id: amr_gtp.per_robot_eur, unit: "eur", min: 20000, typ: 30000, max: 45000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  per_station_eur: {id: amr_gtp.per_station_eur, unit: "eur", min: 25000, typ: 40000, max: 60000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  per_pod_eur: {id: amr_gtp.per_pod_eur, unit: "eur", min: 600, typ: 900, max: 1400, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  fleet_software_fixed_eur: {id: amr_gtp.fleet_software_fixed_eur, unit: "eur", min: 80000, typ: 150000, max: 300000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  floor_prep_per_m2_eur: {id: amr_gtp.floor_prep_per_m2_eur, unit: "eur/m2", min: 10, typ: 20, max: 40, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  # [P] F7 capex table (line 1089): equipment "robots × €/robot + stations × €/station + charging",
+  # no spec value and no analog: 0 = charging assumed included in per_robot_eur until the [EXPERT] sets it.
+  charging_per_robot_eur: {id: amr_gtp.charging_per_robot_eur, unit: "eur", min: 0, typ: 0, max: 0, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11, note: "no spec value; 0 = included in per_robot_eur"}
+  integration_share: 0.10
+  commissioning_share: 0.05
+  contingency_share: 0.10
+opex:
+  maintenance_share_of_equipment_capex: {id: amr_gtp.maintenance_share_of_equipment_capex, unit: "-", min: 0.04, typ: 0.06, max: 0.08, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  kwh_per_robot_year: {id: amr_gtp.kwh_per_robot_year, unit: "kWh", min: 1000, typ: 1500, max: 2200, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  software_eur_year: {id: amr_gtp.software_eur_year, unit: "eur", min: 20000, typ: 40000, max: 80000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+life: {equipment_life_years: 8, renewal_share: 0.6}

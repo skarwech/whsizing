@@ -1,0 +1,9 @@
+# T5.1 malformed fixture: packaging_eur_per_order has no unit
+# Finance defaults. Spec Appendix D (description.md lines 1730-1734), F7. [P] placeholders, verbatim.
+packaging_eur_per_order: {id: finance.packaging_eur_per_order, min: 0.6, typ: 0.9, max: 1.3, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+fixed_energy_kwh_year: 20000
+default_roles_cost_eur_h: {operator: 26, forklift_driver: 28, team_leader: 34}   # replaced by client values
+wms_adaptation_default_eur: 30000
+# [P] F7 energy_t (line 1104) uses kWh_per_station_year, which the spec never values. Analog of
+# amr_gtp.kwh_per_robot_year (Appendix C.2, line 1676) until the [EXPERT] sets it.
+kwh_per_station_year: {id: finance.kwh_per_station_year, unit: "kWh", min: 1000, typ: 1500, max: 2200, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11, note: "no spec value; analog of amr_gtp.kwh_per_robot_year"}

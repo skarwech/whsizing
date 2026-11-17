@@ -1,0 +1,52 @@
+# Family S0: manual picker-to-parts. Spec Appendix C.1 (description.md lines 1585-1632).
+# All values are [P] [EXPERT] placeholders (spec Appendix C / F5 schema), verbatim; ranges are full
+# Param blocks (source TODO, confidence L). Ids: catalog/README.md. Changes: catalog/CHANGELOG.md.
+id: manual_p2p
+title: {fr: "Manuel picker-to-parts", en: "Manual picker-to-parts"}
+version: 0.1.0
+description: {fr: "Préparation manuelle en rayonnage et palettier, chariots et chariots élévateurs.", en: "Manual picking from shelving and pallet rack, with carts and forklifts."}
+constraints:
+  max_item_mm: [2000, 1200, 1200]      # practically unconstrained; pallets handled by forklift
+  max_weight_kg: 1000
+  excludes_hazmat: false
+  temperature_classes: [ambient, chilled, frozen]
+  min_scale_lines_day: 0
+storage:
+  pallet_rack:
+    positions_per_m2_per_level: {id: manual_p2p.pallet_rack_positions_per_m2_per_level, unit: "1/m2", min: 0.30, typ: 0.38, max: 0.45, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}     # includes aisles (wide-aisle reach truck)
+    pallet_load_height_mm: 1400
+    beam_pitch_mm: 150
+    top_clearance_m: 0.6
+    max_levels: 6
+    fill_factor: {id: manual_p2p.pallet_rack_fill_factor, unit: "-", min: 0.80, typ: 0.85, max: 0.90, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  shelving:
+    bins_per_m2_per_level: {id: manual_p2p.shelving_bins_per_m2_per_level, unit: "1/m2", min: 6, typ: 8, max: 10, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+    bin_net_cube_m3: 0.040
+    bin_pitch_mm: 400
+    shelf_max_height_m: 2.1
+    ergonomic_max_levels: 5
+    fill_factor: {id: manual_p2p.shelving_fill_factor, unit: "-", min: 0.70, typ: 0.80, max: 0.90, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  pick_face_policy: {classes_with_pick_face: [A, B], faces_per_sku: 1}
+throughput:
+  pick_rate_shelving_lines_h: {id: manual_p2p.pick_rate_shelving_lines_h, unit: "lines/h", min: 50, typ: 70, max: 95, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}         # incl. walking, scanning
+  pick_rate_pallet_lines_h: {id: manual_p2p.pick_rate_pallet_lines_h, unit: "lines/h", min: 25, typ: 35, max: 50, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  eta_pick: {id: manual_p2p.eta_pick, unit: "-", min: 0.75, typ: 0.85, max: 0.92, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  forklift_moves_h: {id: manual_p2p.forklift_moves_h, unit: "moves/h", min: 12, typ: 16, max: 22, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+  replen_units_per_move: {id: manual_p2p.replen_units_per_move, unit: "units", min: 40, typ: 80, max: 150, source: TODO, confidence: L, pessimistic_end: min, date: 2026-11}
+area:
+  m2_per_pack_station: {id: manual_p2p.m2_per_pack_station, unit: "m2", min: 10, typ: 12, max: 15, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+capex:
+  per_pallet_position_eur: {id: manual_p2p.per_pallet_position_eur, unit: "eur", min: 60, typ: 90, max: 140, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  per_shelf_bin_eur: {id: manual_p2p.per_shelf_bin_eur, unit: "eur", min: 8, typ: 12, max: 18, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  per_forklift_eur: {id: manual_p2p.per_forklift_eur, unit: "eur", min: 25000, typ: 35000, max: 50000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  per_cart_eur: {id: manual_p2p.per_cart_eur, unit: "eur", min: 800, typ: 1500, max: 3000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  wms_adaptation_fixed_eur: {id: manual_p2p.wms_adaptation_fixed_eur, unit: "eur", min: 20000, typ: 50000, max: 120000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  building_works_per_m2_eur: {id: manual_p2p.building_works_per_m2_eur, unit: "eur/m2", min: 30, typ: 60, max: 120, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  integration_share: 0.05
+  commissioning_share: 0.02
+  contingency_share: 0.10
+opex:
+  maintenance_share_of_equipment_capex: {id: manual_p2p.maintenance_share_of_equipment_capex, unit: "-", min: 0.02, typ: 0.04, max: 0.06, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  kwh_per_forklift_year: {id: manual_p2p.kwh_per_forklift_year, unit: "kWh", min: 3000, typ: 4500, max: 6000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+  software_eur_year: {id: manual_p2p.software_eur_year, unit: "eur", min: 5000, typ: 15000, max: 40000, source: TODO, confidence: L, pessimistic_end: max, date: 2026-11}
+life: {equipment_life_years: 10, renewal_share: 0.5}

@@ -1,0 +1,15 @@
+# Appendix E project.yaml
+name: pilot_client_x
+language: [fr]
+out_dir: runs/
+catalog: catalog/
+salt_file: ~/.whsizing/salt_client_x
+inputs:
+  order_lines: {files: [data/ventes_2025.csv, data/ventes_2026.csv], mapping: mapping/order_lines.yaml}
+  sku_master:  {files: [data/articles.xlsx], sheet: "Articles", mapping: mapping/sku_master.yaml}
+  inventory:   {files: [data/stock_*.csv], mapping: mapping/inventory.yaml}
+  receipts:    null
+basis: basis/client_x.yaml
+scenarios: scenarios/client_x.yaml
+profile_cfg: {abc_thresholds: [0.80, 0.95], dead_stock_days: 180}
+options: {worlds: all, sensitivity: true, delta: 0.2, strict: false}

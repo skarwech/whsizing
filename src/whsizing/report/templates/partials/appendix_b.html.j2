@@ -1,0 +1,8 @@
+{{ m.h1(S.app_b) }}
+<div class="pair">
+  {{ m.block(g("data_quality", "dq_score")) }}
+  {{ m.block(g("data_quality", "dq_coverage")) }}
+</div>
+{{ m.block(g("data_quality", "dq_rules", drop=["message"]), "dense") }}
+{{ m.block(g("data_quality", "dq_rows")) }}
+{{ m.bullets(dq_notes) }}

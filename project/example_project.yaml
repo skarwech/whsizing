@@ -1,0 +1,16 @@
+# Appendix E project.yaml on synthetic data. Relative paths resolve against this file's folder.
+# Generate the data first: uv run python data/synth/generator.py data/synth/profiles/ecom_mid.yaml
+name: ecom_mid_example
+language: [fr]
+out_dir: ../runs/
+catalog: ../catalog/
+salt_file: null          # no salt file: export WHSIZING_SALT=<secret> first (same salt, same run)
+inputs:
+  order_lines: {files: [../data/generated/ecom_mid/csv_en/order_lines.csv]}
+  sku_master:  {files: [../data/generated/ecom_mid/csv_en/sku_master.csv]}
+  inventory:   {files: [../data/generated/ecom_mid/csv_en/inventory.csv]}
+  receipts:    {files: [../data/generated/ecom_mid/csv_en/receipts.csv]}
+basis: ../basis/example_basis.yaml
+scenarios: ../scenarios/example_scenarios.yaml
+profile_cfg: {abc_thresholds: [0.80, 0.95], dead_stock_days: 180}
+options: {worlds: all, sensitivity: true, delta: 0.2, strict: false}

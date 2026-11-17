@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data quality report</title>
+<style>
+  :root { --ink:#1f2933; --muted:#616e7c; --line:#d9e2ec; --ok:#2f8132; --info:#2766b5;
+          --warn:#b7791f; --block:#c53030; --bg:#ffffff; --soft:#f5f7fa; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         color: var(--ink); background: var(--bg); margin: 0 auto; max-width: 960px;
+         padding: 24px 16px 48px; line-height: 1.5; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.2rem; margin: 32px 0 8px; border-bottom: 1px solid var(--line);
+       padding-bottom: 4px; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .cover { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; background: var(--soft);
+           border-radius: 12px; padding: 20px 24px; margin-top: 16px; }
+  .score { font-size: 3rem; font-weight: 700; line-height: 1; }
+  .score small { font-size: 1.1rem; color: var(--muted); font-weight: 400; }
+  .band { display: inline-block; border-radius: 999px; padding: 4px 14px; color: #fff;
+          font-weight: 600; text-transform: capitalize; }
+  .band-usable { background: var(--ok); }
+  .band-usable-with-caveats { background: var(--warn); }
+  .band-remediation-needed { background: var(--block); }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line);
+           vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sev { font-weight: 600; white-space: nowrap; }
+  .sev-ok { color: var(--ok); } .sev-info { color: var(--info); }
+  .sev-warning { color: var(--warn); } .sev-blocking { color: var(--block); }
+  .card { border-left: 4px solid var(--warn); background: var(--soft); padding: 10px 14px;
+          margin: 10px 0; border-radius: 4px; }
+  .card.blocking { border-color: var(--block); }
+  details { margin-top: 6px; } summary { cursor: pointer; color: var(--info); }
+  .scroll { overflow-x: auto; }
+  code { font-size: .85rem; }
+</style>
+</head>
+<body>
+<h1>Data quality report</h1>
+<div class="muted">Produced {{ report.created_at.strftime("%Y-%m-%d %H:%M UTC") }} ·
+  identifiers are anonymised (hashed) in this report.</div>
+
+<div class="cover">
+  <div class="score">{{ report.score|round(0, "floor")|int }}<small> / 100</small></div>
+  <div>
+    <span class="band band-{{ report.band|replace(' ', '-') }}">{{ report.band }}</span>
+    <p style="margin:8px 0 0">{{ band_text }}</p>
+  </div>
+</div>
+
+<h2>What we received</h2>
+<div class="scroll"><table>
+  <tr><th>Data</th><th>Files</th><th class="num">Rows read</th><th class="num">Rows kept</th>
+      <th>Removed (reason: rows)</th></tr>
+  {% for d in datasets %}
+  <tr><td>{{ d.dataset|replace('_', ' ') }}</td>
+      <td>{% for f in d.files %}{{ f.path.split('/')[-1] }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      <td class="num">{{ "{:,}".format(d.rows_in) }}</td>
+      <td class="num">{{ "{:,}".format(d.rows_out) }}</td>
+      <td>{% for k, v in d.dropped_by_rule.items() %}{{ k }}: {{ "{:,}".format(v) }}{% if not loop.last %} · {% endif %}{% else %}none{% endfor %}</td></tr>
+  {% else %}
+  <tr><td colspan="5">Row counts per table: {% for k, v in report.rows.items() %}{{ k }} {{ v }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
+  {% endfor %}
+</table></div>
+
+<h2>Key figures</h2>
+<table>
+  {% set cov = report.coverage %}
+  <tr><td>Order lines whose product has dimensions and weight</td>
+      <td class="num">{{ "%.1f"|format(100 * cov.get("dims_coverage_lines", 0)) }} %</td></tr>
+  {% if "history_months" in cov %}
+  <tr><td>Length of order history</td><td class="num">{{ "%.1f"|format(cov.history_months) }} months</td></tr>
+  {% endif %}
+  {% if "order_ts_with_time_share" in cov %}
+  <tr><td>Order lines with a time of day</td>
+      <td class="num">{{ "%.1f"|format(100 * cov.order_ts_with_time_share) }} %</td></tr>
+  {% endif %}
+  {% if "units_per_pallet_default_share" in cov %}
+  <tr><td>Products without case or pallet quantities (a default is used)</td>
+      <td class="num">{{ "%.1f"|format(100 * cov.units_per_pallet_default_share) }} %</td></tr>
+  {% endif %}
+</table>
+
+<h2>Points to look at</h2>
+{% for r in flagged %}
+<div class="card {{ r.severity }}">
+  <strong>{{ rule_text[r.rule][0] }}</strong>
+  <span class="sev sev-{{ r.severity }}">— {{ "must be fixed" if r.severity == "blocking" else "warning" }}</span>
+  ({{ r.dataset|replace('_', ' ') }})<br>
+  {{ r.message }}<br><span class="muted">{{ rule_text[r.rule][1] }}</span>
+  {% if r.sample_rows %}
+  <details><summary>Examples</summary><div class="scroll"><table>
+    <tr>{% for k in r.sample_rows[0].keys() %}<th>{{ k }}</th>{% endfor %}</tr>
+    {% for row in r.sample_rows %}<tr>{% for v in row.values() %}<td>{{ v if v is not none else "" }}</td>{% endfor %}</tr>{% endfor %}
+  </table></div></details>
+  {% endif %}
+</div>
+{% else %}
+<p>Nothing to fix: every check passed or only produced information.</p>
+{% endfor %}
+{% for n in report.notes %}<div class="card">{{ n }}</div>{% endfor %}
+
+<h2>All checks</h2>
+<div class="scroll"><table>
+  <tr><th>Check</th><th>Data</th><th>Result</th><th>Details</th></tr>
+  {% for r in report.rules %}
+  <tr><td>{{ rule_text[r.rule][0] }} <span class="muted">({{ r.rule }})</span></td>
+      <td>{{ r.dataset|replace('_', ' ') }}</td>
+      <td class="sev sev-{{ r.severity }}">{{ {"ok": "✓ passed", "info": "ℹ information", "warning": "⚠ warning", "blocking": "✖ must be fixed"}[r.severity] }}</td>
+      <td>{{ r.message }}</td></tr>
+  {% endfor %}
+</table></div>
+
+<h2>How the score is calculated</h2>
+<p class="muted">Start at 100; minus 25 per blocking issue (at most 50), minus 5 per warning
+  (at most 25), minus up to 20 for missing dimensions, minus 10 if the history is shorter than
+  12 months. 80 and above: usable; 60 to 79: usable with caveats; below 60: remediation needed.</p>
+<table>
+  {% for k, v in report.score_breakdown.items() %}
+  <tr><td>{{ k|replace('_', ' ') }}</td><td class="num">{{ "%.1f"|format(v) }}</td></tr>
+  {% endfor %}
+  <tr><th>Score</th><th class="num">{{ "%.1f"|format(report.score) }}</th></tr>
+</table>
+</body>
+</html>

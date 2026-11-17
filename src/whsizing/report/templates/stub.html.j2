@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>{{ r.scenario.name }}</title></head>
+<body>
+<h1>{{ r.scenario.id }} · {{ r.scenario.name }}</h1>
+<div class="banner">Indicative study: walking-skeleton output from a mock result, not a sizing.</div>
+
+<h2>Equipment</h2>
+<table>
+  <tr><th>Resource</th><th>lo</th><th>typ</th><th>hi</th><th>unit</th></tr>
+  {% for name, rng in r.equipment.items() %}
+  <tr><td>{{ name }}</td><td>{{ "%.1f"|format(rng.lo) }}</td><td>{{ "%.1f"|format(rng.typ) }}</td><td>{{ "%.1f"|format(rng.hi) }}</td><td>{{ rng.unit }}</td></tr>
+  {% endfor %}
+</table>
+<p>Bottleneck: {{ r.bottleneck }} · eligible line share {{ "%.0f"|format(100 * r.eligibility.share_lines) }} %</p>
+
+<h2>Labor and area</h2>
+<table>
+  <tr><th>Metric</th><th>lo</th><th>typ</th><th>hi</th></tr>
+  <tr><td>Design-day heads</td><td>{{ "%.1f"|format(r.labor.total_heads.lo) }}</td><td>{{ "%.1f"|format(r.labor.total_heads.typ) }}</td><td>{{ "%.1f"|format(r.labor.total_heads.hi) }}</td></tr>
+  <tr><td>Roster</td><td>{{ "%.1f"|format(r.labor.roster.lo) }}</td><td>{{ "%.1f"|format(r.labor.roster.typ) }}</td><td>{{ "%.1f"|format(r.labor.roster.hi) }}</td></tr>
+  <tr><td>Total area (m²)</td><td>{{ "%.0f"|format(r.area.total_m2.lo) }}</td><td>{{ "%.0f"|format(r.area.total_m2.typ) }}</td><td>{{ "%.0f"|format(r.area.total_m2.hi) }}</td></tr>
+</table>
+<p>Building {{ "%.0f"|format(r.area.building_m2) }} m² · fit: {{ "yes" if r.area.fit else "no" }}</p>
+
+<h2>Flags</h2>
+<ul>
+  {% for f in r.flags %}<li>{{ f.code }} ({{ f.severity }}): {{ f.message }}</li>{% else %}<li>none</li>{% endfor %}
+</ul>
+<p class="source">engine v{{ version }} · trace {{ r.trace_path }}</p>
+</body>
+</html>

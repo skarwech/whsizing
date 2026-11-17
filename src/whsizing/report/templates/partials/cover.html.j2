@@ -1,0 +1,13 @@
+<section class="cover">
+  <p class="kicker">{{ t("pdf.cover.kicker") }}</p>
+  <h1 class="title">{{ t("pdf.title") }}</h1>
+  <p class="subtitle">{{ study.client }} · {{ study.site }}</p>
+  <div class="banner">{{ banner }}</div>
+  <table class="facts">
+    {% for label, value in cover_facts %}<tr><th>{{ label }}</th><td>{{ value }}</td></tr>{% endfor %}
+  </table>
+  <h2 class="toc-title">{{ t("pdf.toc") }}</h2>
+  <ol class="toc">
+    {% for s in sections %}<li><a href="#{{ s.id }}">{% if s.num %}<span class="n">{{ s.num }}</span>{% endif %}{{ s.title }}</a></li>{% endfor %}
+  </ol>
+</section>

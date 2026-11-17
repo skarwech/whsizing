@@ -1,0 +1,12 @@
+# Golden case scenarios (G1, T1.5): S0 manual baseline vs S2 cube AS/RS (Appendix E format).
+# S2 sets extra_max_weight_kg (F5 step 2: weight ≤ max_weight_kg and ≤ extra_max_weight_kg if set)
+# so the overflow zone gets a shelving class: every SKU outside the cube dims envelope is also
+# outside the shelf envelope, so without it the overflow is pallet rack only (G1 audit L7).
+# 2.0 kg removes 5 SKUs from the cube (91 → 86): 2 to overflow shelving, 2 to overflow pallet
+# rack, 1 with zero stock (no position, I14).
+# The family-level keys eligibility.cube_asrs.* keep the default EligibilityCfg (T5.3); the
+# scenario's shares are S2.eligibility.* (docs/INTERPRETATIONS.md I44).
+scenarios:
+  - {id: S0, name: "Manuel picker-to-parts", family: manual_p2p, is_baseline: true}
+  - {id: S2, name: "AS/RS cube", family: cube_asrs, eligibility: {assume_eligible_if_missing_dims: false, extra_max_weight_kg: 2.0}}
+baseline: S0

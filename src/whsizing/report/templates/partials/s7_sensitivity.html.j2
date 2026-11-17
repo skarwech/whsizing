@@ -1,0 +1,9 @@
+{{ m.h1(S.sensitivity) }}
+{% if sens %}
+{{ m.figure(charts.tornado, "tornado") }}
+<h3>{{ bt("sensitivity", "break_even") }}</h3>
+{{ m.bullets(break_even) }}
+{{ m.block(g("sensitivity", "percentile_sweep")) }}
+{% else %}
+<p class="note">{{ sens_note }}</p>
+{% endif %}

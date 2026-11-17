@@ -1,0 +1,14 @@
+# Appendix E basis.yaml. Times are quoted: unquoted 15:00 is read by YAML 1.1 as 900.
+client: "Client X"
+site: "Lyon"
+operations: {operating_days_per_year: 252, shifts_per_day: 2, hours_per_shift: 7.0, paid_hours_per_person_day: 7.0,
+             annual_paid_hours_per_fte: 1607, utilisation: 0.85, absenteeism: 0.06, pfd_allowance: 0.12}
+service:    {cutoff_time: 15:00, carrier_departure_time: "18:30", same_day_share: 0.6}
+projection: {horizon_years: 5, growth_rate: 0.04, design_percentile: 95, peak_stock_factor: 1.15, trailing_months: 24}
+flows:      {returns_rate: 0.04, inbound_mode: derived, pallets_per_truck: 26, truck_dwell_hours: 1.0, dock_utilisation: 0.7,
+             pallet_order_weight_kg: 300, pallet_order_cube_m3: 0.6, parcel_max_weight_kg: 30}
+building:   {area_m2: 12000, clear_height_m: 10.5, dock_doors_in: 4, dock_doors_out: 6, rent_eur_m2_year: 58, rent_mode: footprint}
+finance:    {discount_rate: 0.08, horizon_years: 5, wage_inflation: 0.025, energy_inflation: 0.03, energy_price_eur_kwh: 0.17,
+             labor_cost_eur_h: {operator: 25.5, forklift_driver: 27.8, team_leader: 33.0}, temp_premium: 0.15}
+baseline:   {description: "Current manual operation, 2 shifts", actual_fte: {picking: 18, packing: 9, receiving: 4, shipping: 5, indirect: 4}}
+overrides:  {"manual_p2p.pick_rate_shelving_lines_h": 62}
