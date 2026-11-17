@@ -432,7 +432,6 @@ def test_T10_4_page_6_drilldown_depth_slider_changes_how_much_is_shown(stored_ru
 
 
 # ------------------------------------------------------------------------- the staged flow (UI)
-@pytest.mark.slow
 @pytest.mark.parametrize(("cap", "explained"), [(0, True), (1, True), (200, False), (1024, False)])
 def test_T10_4_the_upload_page_explains_a_small_upload_cap(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, cap: int, explained: bool
@@ -449,6 +448,7 @@ def test_T10_4_the_upload_page_explains_a_small_upload_cap(
     assert "--server.maxUploadSize 1024" in notice and "just app" in notice
 
 
+@pytest.mark.slow
 def test_T10_4_staged_flow_from_upload_to_results_without_the_terminal(
     csv_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -467,9 +467,10 @@ def saves(at: AppTest) -> object:
 def test_T10_4_the_demo_names_the_limit_instead_of_freezing_on_a_huge_input(
     demo_env: SimpleNamespace,
 ) -> None:
-    """The security review froze the demo with plain widgets: a 1000-year horizon, a lifted guard
-    on the equipment count (an override typed in the YAML box of page 4), 30 scenarios (the Add
-    button of page 5). Each is a message naming the limit now, and nothing runs."""
+    """The security review found inputs of plain widgets that cost the shared server minutes: a
+    1000-year horizon, a lifted guard on the equipment count (an override typed in the YAML box of
+    page 4), 30 scenarios (the Add button of page 5). Each is a message naming the limit now, and
+    nothing runs."""
     at = entry().run()
     at.button(key="demo.load").click().run()
     assert not at.exception and not at.error
@@ -527,8 +528,7 @@ def test_T10_4_the_demo_names_the_limit_instead_of_freezing_on_a_huge_input(
     assert tr("demo.limit.scenarios", "en", max=demo_limits.MAX_SCENARIOS) in [
         e.value for e in at.error
     ]
-    assert size_button(at).disabled
-    assert state.stage(run) == "ingested"  # nothing was sized
+    assert size_button(at).disabled  # (a click on it is forced in test_f10_app_demo_review.py)
 
 
 @pytest.mark.slow

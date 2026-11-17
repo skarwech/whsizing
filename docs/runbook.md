@@ -49,9 +49,9 @@ docker run --rm --entrypoint sh -e WHSIZING_SALT=choose-a-secret -v "$(pwd)/runs
   -c 'whsizing synth data/synth/profiles/ecom_mid.yaml && whsizing run-all project/example_project.yaml'
 ```
 
-Docker is not installed on the machine used for this runbook: the sequence ran with the local
-`whsizing` (exit 0), the `docker run` form itself is untested here. `just demo` is the same flow
-without Docker (synth, then `run-all`).
+The `docker run` form is what the CI job `docker-smoke` runs on every push (the image is built from
+the `Dockerfile`, `run-all` runs inside it, and the PDF and the Excel are opened afterwards). `just
+demo` is the same flow without Docker (synth, then `run-all`).
 
 Quality gates (developers): `just test` (ruff, pyright, pytest without the `bench` marker),
 `just test-fast` (unit tests), `just bench` (C5 budgets), `just --list`.

@@ -33,7 +33,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from whsizing.app.calls import call
+from whsizing.app.calls import call, exclusive
 from whsizing.cli.data import ingest_cmd
 from whsizing.cli.sizing import compare_cmd, size_cmd
 from whsizing.errors import ConfigError
@@ -55,7 +55,9 @@ RUN_MAX_AGE_S = 3 * 3600  # [P] a visitor's demo run is deleted three hours afte
 MAX_RUNS = 30  # [P] and above this many demo runs the oldest go first (the shared one stays)
 
 _LOCK = threading.RLock()  # one data generation / shared build at a time
-_shared: Path | None = None  # ponytail: per server process; a restart rebuilds it (about 30 s)
+_shared: Path | None = (
+    None  # ponytail: per server process; a restart rebuilds it (about 10 s on a laptop)
+)
 
 
 def demo_only() -> bool:
@@ -212,14 +214,15 @@ def load_demo(runs: Path) -> Path:
 def size_demo(run: Path, catalog: Path) -> None:
     """The CLI `size` then `compare` (with the sensitivity) on the run's drafts, like page 5."""
     drafts = run / "ui"
-    call(
-        size_cmd,
-        run=run,
-        basis=drafts / "basis.yaml",
-        scenarios=drafts / "scenarios.yaml",
-        catalog=catalog,
-    )
-    call(compare_cmd, run=run, sensitivity=True)
+    with exclusive():  # `compare` must not wait behind another visitor's command after `size`
+        call(
+            size_cmd,
+            run=run,
+            basis=drafts / "basis.yaml",
+            scenarios=drafts / "scenarios.yaml",
+            catalog=catalog,
+        )
+        call(compare_cmd, run=run, sensitivity=True)
 
 
 def forget_shared() -> None:
@@ -231,9 +234,10 @@ def forget_shared() -> None:
 
 def shared_run(runs: Path, catalog: Path) -> Path:
     """The finished example: ingested, sized and compared once per server process (the first visit
-    waits about 30 s), then every visitor opens the same run. It is sized once and never again, but
-    it is not read-only: a visitor's Excel or PDF export on page 6 adds files to `report/` and the
-    timings to `manifest.json` (`report_cmd`), which is why the manifest is written atomically."""
+    waits about 10 s on a laptop), then every visitor opens the same run. It is sized once and
+    never again, but it is not read-only: a visitor's Excel or PDF export on page 6 adds files to
+    `report/` and the timings to `manifest.json` (`report_cmd`), which is why the manifest is
+    written atomically."""
     global _shared
     with _LOCK:
         run = _shared

@@ -2,14 +2,16 @@
 
 An anonymous visitor shares one process, and the commands run one at a time and cannot be
 interrupted: plain widgets must not be able to ask the engine for minutes of work or gigabytes.
-`whsizing.app.demo_limits` bounds the inputs that did (measured in the security review of the demo:
-a 320-year horizon, 30 scenarios, a lifted `engine.max_equipment_count`, overrides far outside the
-catalog). The AppTest side is in tests/e2e/test_f10_app_demo.py.
+`whsizing.app.demo_limits` bounds the inputs that did (found in the security reviews of the demo:
+a 320-year finance horizon, 30 scenarios, 300 shifts per day, a lifted `engine.max_equipment_count`,
+overrides far outside the catalog). The AppTest side is in tests/e2e/test_f10_app_demo.py.
 """
 
 from __future__ import annotations
 
 import json
+import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -96,8 +98,9 @@ def test_scenarios_over_the_limit_are_refused(public: None, catalog: Catalog) ->
 def test_a_constant_cannot_be_overridden_least_of_all_the_guard_against_endless_queues(
     public: None, catalog: Catalog
 ) -> None:
-    """`engine.max_equipment_count` stops a queue model that needs millions of stations; lifted, a
-    visitor made the engine loop for a quarter of an hour on 2.8 million packing stations."""
+    """`engine.max_equipment_count` stops a queue model that needs millions of stations (a packing
+    rate far below the catalog's asks for 1.3 to 2.8 million); lifted, a security review saw the
+    engine run for minutes on such an input, which a later audit could not reproduce (10 s)."""
     assert "engine.max_equipment_count" in catalog.constants
     basis = {"overrides": {"engine.max_equipment_count": 10**12}}
     assert limit_problems(basis, {}, catalog) == [
@@ -113,7 +116,7 @@ def test_a_parameter_stays_inside_the_catalog_range_in_the_basis_and_in_a_scenar
     assert limit_problems(inside, {}, catalog) == []
     edges = {"overrides": {"labor.packing_S": param.min}}
     assert limit_problems(edges, {}, catalog) == []  # the bounds themselves are the catalog's
-    for value in (0.000055, param.min - 1, param.max + 1):  # the first: the visitor's 1000x
+    for value in (0.000055, param.min - 1, param.max + 1):  # the first: a million times too low
         basis = {"overrides": {"labor.packing_S": value}}
         scenarios = {"scenarios": [{"id": "S0", "overrides": {"labor.packing_S": value}}]}
         wanted = [("demo.limit.range", {"id": "labor.packing_S", "lo": param.min, "hi": param.max})]
@@ -143,6 +146,26 @@ def test_a_number_typed_as_text_inside_the_range_is_allowed(
     overrides = {"labor.packing_S": text}
     scenarios = {"scenarios": [{"id": "S0", "overrides": overrides}]}
     assert limit_problems({"overrides": overrides}, scenarios, catalog) == []
+
+
+def test_the_catalog_maximum_is_allowed_and_a_hair_above_it_is_not(
+    public: None, catalog: Catalog
+) -> None:
+    param = catalog.params["labor.packing_S"]
+    assert limit_problems({"overrides": {"labor.packing_S": param.max}}, {}, catalog) == []
+    assert keys(
+        limit_problems({"overrides": {"labor.packing_S": param.max + 0.001}}, {}, catalog)
+    ) == ["demo.limit.range"]
+
+
+def test_a_bool_override_is_read_like_the_library_reads_it(public: None, catalog: Catalog) -> None:
+    """ScenarioSet reads `true` as 1.0, which is outside the range of a packing rate: the limit
+    must see the number the library will use, not skip a value that is no `int | float`."""
+    param = catalog.params["labor.packing_S"]
+    scenarios = {"scenarios": [{"id": "S0", "overrides": {"labor.packing_S": True}}]}
+    assert limit_problems({}, scenarios, catalog) == [
+        ("demo.limit.range", {"id": "labor.packing_S", "lo": param.min, "hi": param.max})
+    ]
 
 
 @pytest.mark.parametrize(("text", "refused"), [("21", True), ("1e3", True), ("20", False)])
@@ -282,6 +305,36 @@ def test_the_resolved_spelling_of_a_folder_is_hidden_too(
     assert scrub(f"{link}/runs/x") == "<runs>/x"
 
 
+def test_the_app_and_the_temporary_folders_are_hidden_too(
+    public: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    app = tmp_path / "srv" / "app"
+    scratch = tmp_path / "srv" / "scratch"
+    app.mkdir(parents=True)
+    scratch.mkdir()
+    monkeypatch.chdir(app)
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    text = f"{app}/catalog/x.yaml, {scratch}/whsizing-abc/data.csv"
+    assert scrub(text) == "<app>/catalog/x.yaml, <tmp>/whsizing-abc/data.csv"
+
+
+def test_the_home_and_the_python_folders_are_hidden_too(
+    public: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A message that names a file of the interpreter or of the account running the server
+    (a library error about one of its own files) tells a visitor where the server keeps them."""
+    home = tmp_path / "home" / "adminuser"
+    prefix = tmp_path / "opt" / "venv"
+    home.mkdir(parents=True)
+    prefix.mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setattr(sys, "prefix", str(prefix))
+    text = f"{home}/.cache/x, {prefix}/lib/python3.12/site-packages/polars/io.py"
+    assert scrub(text) == "<home>/.cache/x, <python>/lib/python3.12/site-packages/polars/io.py"
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: (_ for _ in ()).throw(RuntimeError)))
+    assert scrub("no home to find") == "no home to find"  # and a missing home is not an error
+
+
 def test_a_relative_folder_name_is_hidden_through_its_resolved_path_not_as_a_word(
     public: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -328,6 +381,51 @@ def test_a_command_behind_a_long_one_gives_up_with_a_busy_error_and_the_next_one
         release.set()
         holder.join()
     assert calls.call(lambda: None).stdout == ""  # and the lock was not left taken
+
+
+def test_exclusive_keeps_the_lock_across_the_calls_so_nothing_slips_between_them() -> None:
+    """`compare` after `size`: the lock is not a queue, so a command waiting for it could take it
+    between the two and the second would then wait behind it (and give up)."""
+    order: list[str] = []
+    other_ran = threading.Event()
+
+    def other() -> None:
+        calls.call(lambda: order.append("other"))
+        other_ran.set()
+
+    waiter = threading.Thread(target=other)
+    with calls.exclusive():
+        calls.call(lambda: order.append("first"))  # the lock is re-entrant: no wait, no deadlock
+        waiter.start()
+        assert not other_ran.wait(0.3)  # it waits for the whole block, not for the first command
+        calls.call(lambda: order.append("second"))
+    waiter.join(5)
+    assert order == ["first", "second", "other"]
+
+
+def test_exclusive_gives_up_with_a_busy_error_when_the_lock_stays_taken_and_leaves_it_free(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(calls, "WAIT_S", 0.2)
+    taken, release = threading.Event(), threading.Event()
+
+    def holder() -> None:
+        with calls.exclusive():
+            taken.set()
+            release.wait(5)
+
+    thread = threading.Thread(target=holder)
+    thread.start()
+    try:
+        assert taken.wait(5)
+        with pytest.raises(CliError) as busy, calls.exclusive():
+            pass
+        assert busy.value.code == BUSY_CODE
+    finally:
+        release.set()
+        thread.join()
+    with calls.exclusive():  # not left taken by the one that gave up
+        assert calls.call(lambda: None).stdout == ""
 
 
 def test_the_busy_message_exists_in_both_languages() -> None:

@@ -97,13 +97,13 @@ with right:
                 catalog_key,
             )
             show_design_day(day, lg)
-        except WhsizingError as e:
-            state.error(f"{type(e).__name__}: {e}")
+        except Exception as e:  # a value the form lets through that no rule of the library
+            state.error(f"{type(e).__name__}: {e}")  # refuses (a time zone): a message, not a crash
 
 if st.button(tr("basis.save", lg), type="primary", disabled=bool(errors)) and not errors:
     path = state.write_draft(run, "basis", nested)
     try:
         load_basis(path)  # the loader of the CLI: same checks
-        st.success(demo_limits.scrub(tr("basis.saved", lg, path=path)))
+        st.success(demo_limits.scrub(tr("basis.saved", lg, path=state.shown_path(run, path))))
     except WhsizingError as e:
         state.error(str(e))

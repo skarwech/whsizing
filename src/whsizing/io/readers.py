@@ -128,9 +128,11 @@ def _read_csv_lenient(path: Path, body: str, delimiter: str) -> pl.DataFrame:
     padded / truncated to the header like Polars. A quote that never closes is a MappingError."""
     reader = csv.reader(io.StringIO(body), delimiter=delimiter)
     try:
-        rows = list(reader)
-    except csv.Error as e:
+        rows = [r for r in reader if r]  # blank lines: Polars skips them, the header is the first
+    except csv.Error as e:  # line that is not
         raise MappingError(f"{path.name}: unreadable CSV near line {reader.line_num}: {e}") from e
+    if not rows:
+        raise MappingError(f"{path.name}: no header row to read (the file has only blank lines)")
     spanning = next((i for i, r in enumerate(rows) if any("\n" in c for c in r)), None)
     if spanning is not None:
         raise MappingError(
@@ -268,6 +270,10 @@ def _finish(
     if len(set(stripped)) == len(stripped):
         df = df.rename(dict(zip(df.columns, stripped, strict=True)))
     cols = [c for c in df.columns if c != SOURCE_ROW]
+    if not cols:
+        raise MappingError(
+            f"{path.name}: the header row has no column; check the file or the mapping"
+        )
     regex = next((j for j, c in enumerate(cols, 1) if c.startswith("^") and c.endswith("$")), None)
     if regex is not None:  # polars takes such a name for a regex selector: no column can carry it
         raise MappingError(

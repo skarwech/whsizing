@@ -2,16 +2,19 @@
 
 The demo runs on somebody else's server: one process for every visitor, whose commands run one at
 a time (`calls._LOCK`) and cannot be interrupted. Plain widgets can ask the engine for minutes of
-work or gigabytes, measured on the demo study: a 320-year horizon takes 53 s and 2.9 GB, 30
-scenarios take 104 s, an `engine.max_equipment_count` of 10^12 lifts the guard against a queue of
-2.8 million packing stations, 300 shifts per day take 34 s and 2.1 GB, and a 2 MB YAML box is
-parsed again on every rerun. The library allows all of it (the user's machine is theirs), so the
-public demo bounds the inputs that cost the most; the full app has no limits.
+work or gigabytes, measured on the demo study: a `finance.horizon_years` of 320 takes 51 s and
+2.4 GB, 30 scenarios take 102 s, 300 shifts per day take 34 s and 2.1 GB, and a 2 MB YAML box is
+parsed again on every rerun. The engine's own guard (`engine.max_equipment_count`) refuses a queue
+model that needs millions of stations, so an override of a constant (it would lift the guard) and
+of a parameter far outside its catalog range (it trips the guard) are refused as well. The library
+allows all of it (the user's machine is theirs), so the public demo bounds the inputs that cost the
+most; the full app has no limits.
 """
 
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
@@ -43,11 +46,9 @@ def _mapping(value: object) -> Mapping[str, Any]:
 
 
 def _number(value: object) -> float | None:
-    """`value` as the library reads a number: pydantic takes numeric text too ("0.000055", " 5 ",
-    and "1e-5", which PyYAML reads as text), so the limits must as well. None for what is no number
-    (the library refuses it itself) and for a bool (so does it)."""
-    if isinstance(value, bool):
-        return None
+    """`value` as the library reads a number: pydantic takes numeric text ("0.000055", " 5 ", and
+    "1e-5", which PyYAML reads as text) and a bool (as 0 or 1: a scenario override) too, so the
+    limits must as well. None for what is no number (the library refuses it itself)."""
     try:
         return _FLOAT.validate_python(value)
     except ValidationError:
@@ -151,6 +152,13 @@ def yaml_too_long(text: str) -> bool:
     return demo.demo_only() and len(text) > MAX_YAML_CHARS
 
 
+def _home() -> str:
+    try:
+        return str(Path.home())
+    except (RuntimeError, KeyError):  # no home directory to find
+        return ""
+
+
 def scrub(text: str) -> str:
     """`text` without the folders of the server (public demo): a message of the library or of a
     command names the run folder it was working in, which tells a visitor nothing they can use."""
@@ -161,6 +169,8 @@ def scrub(text: str) -> str:
         "<work>": str(demo.work_dir()),
         "<app>": str(Path.cwd()),
         "<tmp>": tempfile.gettempdir(),
+        "<home>": _home(),
+        "<python>": sys.prefix,
     }
     folders: list[tuple[str, str]] = []
     for label, folder in hidden.items():

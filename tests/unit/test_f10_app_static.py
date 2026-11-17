@@ -151,18 +151,23 @@ def test_T10_4_banner_text_comes_from_the_report_i18n(lang: str) -> None:
 
 # ------------------------------------------------------------------------- hosted demo files
 def test_T10_4_packages_txt_lists_the_debian_packages_weasyprint_needs() -> None:
-    """Streamlit Community Cloud installs `packages.txt` with apt before the app starts. A name that
-    is not a Debian package fails the whole deployment, so each line must look like one, and the
-    set of the WeasyPrint documentation for Debian (Pango, its FreeType glue, harfbuzz-subset)
-    must be there, or the PDF report cannot be built on the host."""
+    """Streamlit Community Cloud installs `packages.txt` with apt before the app starts, on Debian
+    11 ("bullseye", the package list its documentation points to). An unknown name aborts the
+    whole apt step and the deployment, so each line must be a package that exists there, and the
+    Pango packages WeasyPrint needs must be there, or the PDF report cannot be built on the host.
+    `libharfbuzz-subset0` is the one the WeasyPrint documentation also lists: it does not exist on
+    Debian 11 (it appears with Debian 12) and WeasyPrint 70 loads that library only if present
+    (`allow_fail=True`, a DeprecationWarning otherwise: fontTools subsets the fonts). The image
+    and the CI runner, newer systems, install it."""
     lines = (ROOT / "packages.txt").read_text(encoding="utf-8").split()
     assert lines and len(set(lines)) == len(lines)
     assert all(re.fullmatch(r"[a-z0-9][a-z0-9+.-]+", name) for name in lines), lines
-    assert {"libpango-1.0-0", "libpangoft2-1.0-0", "libharfbuzz-subset0"} <= set(lines)
+    assert {"libpango-1.0-0", "libpangoft2-1.0-0"} <= set(lines)
+    assert "libharfbuzz-subset0" not in lines  # not in Debian 11: it would break the first deploy
     assert any(name.startswith("fonts-") for name in lines)  # a PDF needs at least one font
     assert "tzdata" in lines  # ingestion checks the site's time zone with `ZoneInfo`
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    shared = {"libpango-1.0-0", "libpangoft2-1.0-0", "libharfbuzz-subset0", "fonts-liberation"}
+    shared = {"libpango-1.0-0", "libpangoft2-1.0-0", "fonts-liberation"}
     assert all(name in dockerfile.split() for name in shared)  # the image installs them as well
 
 

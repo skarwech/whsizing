@@ -364,3 +364,39 @@ def test_R6_2_the_file_level_date_format_looks_at_the_first_columns_only(
     dated = [["word", "text"] for _ in range(1000)]
     dated[3] = ["2025-03-01", "2025-03-02"]  # among the first columns: found as before
     assert detect_file_date_format(dated) == "%Y-%m-%d"
+
+
+# ------------------------------------------------ R6.2g: a blank line before the header row
+def test_R6_2_a_saved_header_row_on_a_blank_line_reads_the_file_like_polars_does(
+    tmp_path: Path,
+) -> None:
+    """Was: a raw polars ComputeError (exit 1, no file name): Polars skips the blank line and
+    takes the next one for the header, but the reader that handles a stray quote (`24"` in an
+    unquoted field) took the blank line itself, a header of no column."""
+    path = tmp_path / "g.csv"
+    path.write_text('\nsku;qty;name\nA;1;Ecran 24" LED\nB;2;y\n', encoding="utf-8")
+    mapping = Mapping(dataset="sku_master", header_row=1, delimiter=";", columns={"sku": "sku"})
+    table = read_any(path, mapping=mapping)
+    assert table.columns == ["sku", "qty", "name"]
+    assert table.df["name"].to_list() == ['Ecran 24" LED', "y"]
+
+
+def test_R6_2_a_file_of_blank_lines_and_a_quote_names_the_file(tmp_path: Path) -> None:
+    from whsizing.io.readers import _read_csv_lenient  # pyright: ignore[reportPrivateUsage]
+
+    with pytest.raises(MappingError, match=r"g\.csv: no header row to read") as e:
+        _read_csv_lenient(tmp_path / "g.csv", "\n\n\n", ";")
+    assert e.value.exit_code == 2
+
+
+def test_R6_2_a_header_row_with_no_column_is_a_mapping_error_naming_the_file(
+    tmp_path: Path,
+) -> None:
+    from whsizing.io.readers import _finish  # pyright: ignore[reportPrivateUsage]
+
+    sniffed = SniffResult(
+        encoding="utf-8", delimiter=";", header_row=1, decimal=".", date_format=None, n_rows=0
+    )
+    with pytest.raises(MappingError, match=r"g\.csv: the header row has no column") as e:
+        _finish(tmp_path / "g.csv", pl.DataFrame({"__source_row__": [2, 3]}), sniffed)
+    assert e.value.exit_code == 2

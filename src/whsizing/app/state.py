@@ -319,11 +319,20 @@ def error(text: str) -> None:
 
 
 def cli_error(failed: CliError, lg: Lang) -> None:
-    """The message of a command that exited non-zero (a busy server in the visitor's language)."""
+    """The message of a command that exited non-zero (a busy server in the visitor's language, and
+    in the public demo a run another tab sized meanwhile: the CLI's advice does not apply there)."""
     if failed.code == BUSY_CODE:
         st.warning(tr("demo.busy", lg))
+    elif demo.demo_only() and "already sized" in failed.message:
+        st.info(tr("demo.sealed", lg))
     else:
         error(f"exit {failed.code}: {failed.message}")
+
+
+def shown_path(run: Path, path: Path) -> str:
+    """A draft's path as the page tells it: in the public demo relative to the run (the folders of
+    the server stay out of the messages), else the path itself."""
+    return str(path.relative_to(run)) if demo.demo_only() else str(path)
 
 
 def banner(lg: Lang) -> None:
@@ -334,7 +343,7 @@ def banner(lg: Lang) -> None:
 def require_run(lg: Lang, run: Path | None, wanted: Stage = "ingested") -> Path:
     """The run, or a friendly page: no run yet, or the run has not reached `wanted`."""
     if run is None:
-        st.info(tr("no_run", lg))
+        st.info(tr("demo.no_run" if demo.demo_only() else "no_run", lg))
         st.stop()
     if not reached(run, wanted):
         st.info(tr("stage_missing", lg, stage=wanted, have=stage(run)))

@@ -2,15 +2,16 @@
 .git
 runs
 data/generated
-# secrets and client data never go into an image (same list as .gitignore)
+# secrets and client data never go into an image: the list of .gitignore, with its depths (a
+# pattern without a slash matches at any depth there, only at the root here unless it starts with **/)
 **/.env
 **/*.salt
 salt*
 .streamlit/secrets.toml
-secrets.yaml
+**/secrets.yaml
 client_data
-.coverage
-.hypothesis
+**/.coverage
+**/.hypothesis
 **/__pycache__
 .pytest_cache
 .ruff_cache

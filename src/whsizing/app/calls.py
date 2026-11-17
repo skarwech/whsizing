@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import io
 import threading
-from collections.abc import Callable
-from contextlib import redirect_stderr, redirect_stdout
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -51,12 +51,29 @@ class CliError(Exception):
         self.message = message
 
 
+def _acquire() -> None:
+    if not _LOCK.acquire(timeout=WAIT_S):
+        raise CliError(BUSY_CODE, f"another command has been running for over {WAIT_S:g} s")
+
+
+@contextmanager
+def exclusive() -> Iterator[None]:
+    """The command lock held across several `call`s (it is re-entrant), for commands that must
+    follow one another: the lock is not a queue, so without this a `compare` could wait behind
+    other visitors' commands and give up (`BUSY_CODE`) after the `size` it belongs to, leaving a
+    run that is sized and cannot be compared. `CliError` (`BUSY_CODE`) when it cannot be taken."""
+    _acquire()
+    try:
+        yield
+    finally:
+        _LOCK.release()
+
+
 def call(command: Callable[..., Any], **kwargs: Any) -> CliResult:
     """`command(**kwargs)` with its output captured; `CliError` on a non-zero exit, or with
     `BUSY_CODE` when another command still runs after `WAIT_S`."""
     out, err = io.StringIO(), io.StringIO()
-    if not _LOCK.acquire(timeout=WAIT_S):
-        raise CliError(BUSY_CODE, f"another command has been running for over {WAIT_S:g} s")
+    _acquire()
     try:
         with redirect_stdout(out), redirect_stderr(err):
             command(**kwargs)

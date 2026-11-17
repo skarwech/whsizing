@@ -9,7 +9,7 @@ import streamlit as st
 import yaml
 
 from whsizing.app import basis_form, demo, demo_limits, demo_ui, entry, scenario_cards, state
-from whsizing.app.calls import CliError, call
+from whsizing.app.calls import CliError, call, exclusive
 from whsizing.app.strings import tr
 from whsizing.catalog import load_catalog
 from whsizing.cli.sizing import compare_cmd, size_cmd
@@ -21,14 +21,15 @@ def size_run(run: Path, basis_path: Path, scenarios_path: Path, lg: Lang) -> Non
     """`whsizing size` then `whsizing compare` on the run, like the terminal."""
     with st.spinner(tr("scn.sizing", lg)):
         try:
-            call(
-                size_cmd,
-                run=run,
-                basis=basis_path,
-                scenarios=scenarios_path,
-                catalog=state.catalog_dir(),
-            )
-            call(compare_cmd, run=run, sensitivity=True)
+            with exclusive():  # `compare` must not wait behind another visitor's command
+                call(
+                    size_cmd,
+                    run=run,
+                    basis=basis_path,
+                    scenarios=scenarios_path,
+                    catalog=state.catalog_dir(),
+                )
+                call(compare_cmd, run=run, sensitivity=True)
         except CliError as e:
             state.cli_error(e, lg)
             return
@@ -58,6 +59,8 @@ if removed:
     data = {**data, "scenarios": kept}
 st.session_state[state.SCENARIOS] = data
 at_limit = demo.demo_only() and len(data["scenarios"]) >= demo_limits.MAX_SCENARIOS
+if at_limit:  # a greyed button says nothing
+    st.caption(tr("demo.limit.scenarios", lg, max=demo_limits.MAX_SCENARIOS))
 if removed or st.button(tr("scn.add", lg), disabled=at_limit):
     if not removed:
         st.session_state[state.SCENARIOS] = scenario_cards.with_added(data)
@@ -71,14 +74,15 @@ limits = demo_ui.limit_messages(  # the public demo bounds what a visitor can as
 for message in [*problems, *limits]:
     st.error(message)
 if scenario_set is not None:
-    st.code(yaml.safe_dump(scenario_set.model_dump(mode="json"), sort_keys=False), language="yaml")
+    dump = yaml.safe_dump(scenario_set.model_dump(mode="json"), sort_keys=False, allow_unicode=True)
+    st.code(dump, language="yaml")
 
 c_save, c_size = st.columns(2)
 if c_save.button(tr("scn.save", lg), disabled=scenario_set is None or bool(limits)) and (
     scenario_set and not limits
 ):
     path = state.write_draft(run, "scenarios", scenario_set.model_dump(mode="json"))
-    st.success(demo_limits.scrub(tr("scn.saved", lg, path=path)))
+    st.success(demo_limits.scrub(tr("scn.saved", lg, path=state.shown_path(run, path))))
 if (
     c_size.button(tr("scn.size", lg), type="primary", disabled=scenario_set is None or bool(limits))
     and not limits

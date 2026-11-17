@@ -7,7 +7,7 @@ what `just demo-app` runs on your machine. The full app for real client files st
 
 ## What a visitor sees
 
-- **Open the finished example** (about 30 s the first time, instant afterwards): a complete study of
+- **Open the finished example** (about 10 s the first time on a laptop, longer on the platform where it was not measured; instant afterwards): a complete study of
   the demo site (three scenarios, finance, sensitivity) on page 6, with the "why this number?"
   drill-down and the Excel / PDF exports.
 - **Load the demo data (step by step)**: the four datasets ingested into a run of the visitor's own;
@@ -28,7 +28,7 @@ the open app. In demo mode:
 | Data | the client's, anonymised at ingestion | synthetic, generated on the first visit |
 | Salt | typed or `$WHSIZING_SALT` | random per server process (a salt you set is kept) |
 | Runs a visitor can open | all of the runs folder | only the demo's: the shared example and the run of their session. A run opens by its name (`?run=`); a visitor's run name ends in 16 random hex digits, so the link is the key to it (the data is synthetic) |
-| Old runs | kept | a visitor's demo run is deleted after 3 hours, and the oldest above 30 (the shared example stays) |
+| Old runs | kept | a visitor's demo run older than 3 hours is removed the next time anyone loads the demo data, and so are the oldest above 30 (the shared example stays) |
 | Address | loopback only (on another one every page shows an error) | any (the platform has to reach it) |
 | Commands | one at a time per server process (`calls._LOCK`) | same; one that waits more than 2 minutes behind another gives up with a "server busy" message |
 | Inputs | any | bounded, see below |
@@ -47,10 +47,10 @@ full app have no such limits):
 
 | Input | Limit | What it cost without the limit |
 |---|---|---|
-| `finance.horizon_years`, `projection.horizon_years` | at most 20 years | 320 years: 53 s and 2.9 GB in `compare` |
-| number of scenarios | at most 6 | 30 scenarios: 104 s in `compare`, 30 s for the PDF of 20 |
-| an override of a constant (`engine.max_equipment_count` and the other structural scalars) | not allowed | lifting the guard made the engine loop on 2.8 million packing stations |
-| an override of a parameter | inside the catalog's own range (`min` to `max`) | a packing rate 1000 times too low: the same queue |
+| `finance.horizon_years`, `projection.horizon_years` | at most 20 years | `finance.horizon_years` of 320: about 51 s and 2.4 GB in `compare` (20 years take about 8 s); a 320-year `projection.horizon_years` is refused by the engine's own guard in 2 s |
+| number of scenarios | at most 6 | 30 scenarios: about 102 s in `compare`; the PDF of 20 scenarios: 34 s and 46 pages |
+| an override of a constant (`engine.max_equipment_count` and the other structural scalars) | not allowed | that guard refuses a queue model that needs millions of stations (a packing rate far below the catalog's asks for 1.3 to 2.8 million: refused in 2 s). Lifted, a security review saw the engine run for minutes on such an input; a later audit measured 10 s with the packing rate, so this limit is kept as a precaution |
+| an override of a parameter | inside the catalog's own range (`min` to `max`) | defence in depth: with the guard in place a value far outside the range is refused by the engine in 2 s, and the range keeps the numbers of the demo meaningful |
 | `operations.shifts_per_day` | at most 4 | 300 shifts of a few minutes (the library only asks for one shift at least, and 24 hours in all): 34 s and 2.1 GB in `size` and `compare`; 1,000 shifts about 2 minutes and 4 GB |
 | a text: the client, the site, a scenario's id or name, an override's id | at most 200 characters (the demo's longest is 47); a YAML box of overrides at most 10,000 | a 2 MB box was parsed again at every rerun (5.7 s of CPU each, outside the locks); a 400,000-character client name made the PDF take 14 s under the lock |
 
@@ -79,7 +79,7 @@ just demo-app          # = uv run streamlit run streamlit_app.py --server.addres
    - Repository: `<your-user>/whsizing`, Branch: `main`
    - **Main file path: `streamlit_app.py`**
    - Optional: a custom subdomain.
-3. **Advanced settings**: Python version **3.12** (the default; `requires-python` is `>=3.12`).
+3. **Advanced settings**: Python version **3.12**, chosen explicitly: the lock was made and tested on 3.12 (`requires-python` is `>=3.12`), and the platform's default follows the newest Python that Streamlit supports, which may be a newer one.
    Secrets are optional: `WHSIZING_LANG = "fr"` makes French the default language (otherwise the
    browser's language decides), `WHSIZING_SALT = "..."` replaces the random salt. Write them at the
    top of the secrets text, outside any `[section]`: only top-level keys become environment
@@ -87,14 +87,14 @@ just demo-app          # = uv run streamlit run streamlit_app.py --server.addres
    from outside.
 4. **Deploy.** The first build installs the locked dependencies and the system packages, then the
    app starts; the first visitor to click "Open the finished example" waits for the build of the
-   demo study (the platform's instances are smaller than a laptop: expect 30 s or a little more).
+   demo study (about 10 s on a laptop; the platform's instances are smaller, expect longer: not measured there).
 
 What the platform reads from the repository, and why:
 
 | File | Role |
 |---|---|
 | `uv.lock` + `pyproject.toml` | the dependencies, pinned. Community Cloud takes the first dependency file it finds in this order: `uv.lock`, `Pipfile`, `environment.yml`, `requirements.txt`, `pyproject.toml`; do not add a second dependency file. The `app` group (Streamlit) is a default group, so a plain `uv sync` installs it. |
-| `packages.txt` | Debian packages for the PDF report (WeasyPrint needs Pango): `libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0` (the list of the WeasyPrint documentation for Debian) and fonts; `tzdata`, the time-zone database that ingestion reads (a no-op where the image has it). Without the Pango packages the app still runs and the PDF button shows an error instead of crashing. |
+| `packages.txt` | Debian packages for the PDF report (WeasyPrint needs Pango): `libpango-1.0-0 libpangoft2-1.0-0` and fonts; `tzdata`, the time-zone database that ingestion reads (a no-op where the image has it). Every line must exist on **Debian 11**, the release whose package list the Community Cloud documentation points to: one unknown name aborts the apt step and the deployment. That is why `libharfbuzz-subset0`, which the WeasyPrint documentation also lists, is not here: Debian 11 does not have it (Debian 12 does) and WeasyPrint 70 loads that library only if present. The `Dockerfile` and the CI runner, newer systems, install it. Without the Pango packages the app still runs and the PDF button shows an error instead of crashing. |
 | `streamlit_app.py` | the entry point. It makes `src/` importable when the platform installs the dependencies without the project itself. |
 | `.streamlit/config.toml` | telemetry off, an upload cap of 0 (the hosted demo takes no upload; `just app` passes `--server.maxUploadSize 1024`). No `server.address`: it would stop the platform from reaching the app. |
 | `catalog/`, `basis/demo_basis.yaml`, `scenarios/demo_scenarios.yaml`, `data/synth/profiles/demo.yaml` | what the demo reads. Community Cloud starts the app from the root of the repository, which is where they are looked for. |
@@ -117,14 +117,23 @@ Checked on the build machine (macOS with Docker Desktop), on a clean copy of the
   business case, and the Excel and PDF (17 pages) are built from the page. No error in the browser
   console. Peak memory of the whole flow: 1.0 to 1.3 GB.
 - The same flow inside the Docker image (Debian Linux, built from `uv.lock`; its apt list has the
-  Pango, harfbuzz and font packages of `packages.txt`), PDF built with WeasyPrint on Linux included;
-  about 1.0 GiB in the container.
+  Pango, harfbuzz and font packages), PDF built with WeasyPrint on Linux included; about 1.0 GiB in
+  the container.
+- An emulation of the Community Cloud build on **Debian 11**, the release its documentation names:
+  every line of `packages.txt` installed with `apt-get install` (an unknown name aborts it: an
+  earlier version of the file listed `libharfbuzz-subset0`, which Debian 11 does not have),
+  `uv sync --frozen` on Python 3.12, then the app served to a headless Chromium. The finished
+  example opens in about 16 s on the build machine, the Excel and the PDF (17 pages) are built,
+  and neither the page nor the server log shows an error. It ran in an arm64 container, and
+  Debian 11's own repositories are archived now, so the image reads them from
+  `archive.debian.org`.
 - `streamlit_app.py` under Streamlit's `AppTest` (`tests/e2e/test_f10_app_demo.py`,
   `tests/unit/test_f10_app_demo_data.py`): banner, no uploader, language kept across pages, visitors
   separated, the finished example built once and opened by two visitors, the step-by-step path sized
   through the pages, a host without Pango giving a message instead of a crash.
-- Every locked dependency has a binary wheel for Debian 11 on x86_64 with Python 3.12
-  (`uv pip install --dry-run --python-platform x86_64-manylinux_2_31 --only-binary :all:`).
+- Every locked dependency has a binary wheel for Debian 11 on x86_64 with Python 3.12:
+  `uv export --frozen --no-hashes --no-emit-project -o req.txt` then
+  `uv pip install --dry-run --python-platform x86_64-manylinux_2_31 --python-version 3.12 --only-binary :all: -r req.txt`.
 
 Not checkable from here: the deployment itself on Community Cloud (its uv version, the exact way it
 installs a `uv.lock` project, its memory under load, x86_64 instead of the arm64 used for the

@@ -17,6 +17,17 @@ UI: dict[str, tuple[str, str]] = {
         "ou choisissez un run existant sur la page d'accueil.",
         "No run yet. Open page 1 (Upload) to load data, or pick an existing run on the home page.",
     ),
+    "demo.no_run": (
+        "Aucun run pour le moment. Ouvrez l'exemple terminé, ou chargez les données de démo, "
+        "depuis la page d'accueil.",
+        "No run yet. Open the finished example, or load the demo data, from the home page.",
+    ),
+    "demo.sealed": (
+        "Ce run est déjà dimensionné (un autre onglet ?) et les runs sont immuables : rechargez "
+        "la page pour le voir, ou chargez de nouveau les données de démo pour un nouveau run.",
+        "This run is already sized (another tab?) and runs are immutable: reload the page to see "
+        "it, or load the demo data again for a new run.",
+    ),
     "stage_missing": (
         "Ce run est à l'étape « {have} » ; cette page demande l'étape « {stage} ». Suivez les "
         "pages dans l'ordre (1 à 6).",
@@ -59,8 +70,8 @@ UI: dict[str, tuple[str, str]] = {
         "follow pages 2 to 6 and can change the design basis.",
     ),
     "demo.example": (
-        "Ouvrir l'exemple terminé (≈ 30 s la première fois)",
-        "Open the finished example (≈ 30 s the first time)",
+        "Ouvrir l'exemple terminé (≈ 10 à 30 s la première fois)",
+        "Open the finished example (≈ 10 to 30 s the first time)",
     ),
     "demo.load": ("Charger les données de démo (pas à pas)", "Load the demo data (step by step)"),
     "demo.building": (
