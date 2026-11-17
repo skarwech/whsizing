@@ -375,7 +375,7 @@ def test_R7_2_a_label_goes_inside_a_zone_only_when_it_fits_else_the_legend_names
 
 
 # ---------------------------------------------------------- the canvas that measures the labels
-@pytest.mark.parametrize("area_m2", [5e6, 5e7])  # 158 MB and 1.5 GB of canvas without the guard
+@pytest.mark.parametrize("area_m2", [5e6, 3e7])  # 158 MB and 1.1 GB of canvas without the guard
 def test_T9_6_the_canvas_that_measures_the_labels_is_bounded_whatever_the_building(
     run: RunOutput, area_m2: float
 ) -> None:
@@ -390,7 +390,7 @@ def test_T9_6_the_canvas_that_measures_the_labels_is_bounded_whatever_the_buildi
     assert 0 < width * height <= CANVAS_BUDGET_PX * 1.05
 
 
-def test_T9_6_a_normal_diagram_keeps_matplotlibs_dpi_and_a_huge_one_still_gets_its_svg(
+def test_T9_6_a_normal_diagram_keeps_matplotlibs_dpi_and_a_large_one_still_gets_its_svg(
     run: RunOutput, data: ReportData, tmp_path: Path
 ) -> None:
     import matplotlib
@@ -400,31 +400,60 @@ def test_T9_6_a_normal_diagram_keeps_matplotlibs_dpi_and_a_huge_one_still_gets_i
     normal = layout_blocks(zones_of(run, "S1"), run.results["S1"].area.building_m2, "S1")
     assert draw_diagram(normal, data).dpi == pytest.approx(matplotlib.rcParams["figure.dpi"])
     res = run.results["S1"]
-    area = res.area.model_copy(update={"building_m2": 5e7})
+    area = res.area.model_copy(update={"building_m2": 3e7})  # 30 km2: the largest plan drawn
+    large = run.model_copy(
+        update={"results": {**run.results, "S1": res.model_copy(update={"area": area})}}
+    )
+    svg = build_diagram(dataclasses.replace(data, run=large), "S1", tmp_path).read_text("utf-8")
+    assert svg.startswith("<?xml") and sum(a for _, a in svg_pieces(svg)) > 0
+
+
+@pytest.mark.parametrize("area_m2", [5e7, 1e8, 1e12, 1e18])
+def test_T9_6_a_plan_too_large_to_draw_is_a_config_error_naming_the_scenario_not_a_crash(
+    run: RunOutput, data: ReportData, tmp_path: Path, area_m2: float
+) -> None:
+    """Below 12 dpi FreeType cannot set a text size (`invalid ppem value`) and above 65,536 px a
+    side matplotlib refuses the canvas: raw RuntimeError and ValueError, found with a utilisation
+    of 1e-7. Nothing is allocated: the error comes before the canvas."""
+    from whsizing.report.diagram import draw_diagram
+
+    layout = layout_blocks(zones_of(run, "S1"), area_m2, "S1")
+    with pytest.raises(
+        ConfigError, match=r"block diagram of S1: the plan is too large to draw"
+    ) as e:
+        draw_diagram(layout, data)
+    assert e.value.exit_code == 2 and "design basis" in str(e.value)
+    res = run.results["S1"]
+    area = res.area.model_copy(update={"building_m2": area_m2})
     huge = run.model_copy(
         update={"results": {**run.results, "S1": res.model_copy(update={"area": area})}}
     )
-    svg = build_diagram(dataclasses.replace(data, run=huge), "S1", tmp_path).read_text("utf-8")
-    assert (
-        svg.startswith("<?xml") and sum(a for _, a in svg_pieces(svg)) > 0
-    )  # a drawing, not an error
+    with pytest.raises(ConfigError, match="too large to draw"):
+        build_diagram(dataclasses.replace(data, run=huge), "S1", tmp_path)
+    assert list(tmp_path.iterdir()) == []  # no half-written file
 
 
-@pytest.mark.parametrize("area_m2", [1e8, 1e12, 1e18])
-def test_T9_6_the_dpi_of_the_measuring_canvas_follows_the_budget_down_to_absurd_plans(
+@pytest.mark.parametrize("area_m2", [5e5, 5e6, 3e7])  # the canvas exceeds the budget from 3e5
+def test_T9_6_the_dpi_of_the_measuring_canvas_follows_the_budget_and_stays_legible(
     area_m2: float,
 ) -> None:
-    """Pure arithmetic (an unguarded canvas of these plans would not even allocate): a dpi that
-    keeps the canvas within the budget, never zero, and matplotlib's own for a normal plan."""
+    """Pure arithmetic: the dpi that keeps the canvas within the budget, never below the one at
+    which FreeType sets the smallest label, and matplotlib's own for a normal plan."""
     import math
 
     import matplotlib
 
-    from whsizing.report.diagram import CANVAS_BUDGET_PX, PT_PER_INCH, PX_PER_M, _canvas_dpi
+    from whsizing.report.diagram import (
+        CANVAS_BUDGET_PX,
+        MIN_CANVAS_DPI,
+        PT_PER_INCH,
+        PX_PER_M,
+        _canvas_dpi,  # pyright: ignore[reportPrivateUsage]
+    )
 
+    layout = layout_blocks({"storage": 10.0}, area_m2, "S1")
     side_px = math.sqrt(area_m2) * PX_PER_M + 300  # the margins and the legend column
-    dpi = _canvas_dpi(side_px, side_px)
-    assert dpi is not None and dpi > 0
+    dpi = _canvas_dpi(layout, side_px, side_px)
+    assert dpi is not None and MIN_CANVAS_DPI <= dpi < float(matplotlib.rcParams["figure.dpi"])
     assert (side_px / PT_PER_INCH * dpi) ** 2 <= CANVAS_BUDGET_PX * 1.0001
-    assert _canvas_dpi(560.0, 400.0) is None  # a normal diagram: matplotlib's dpi
-    assert float(matplotlib.rcParams["figure.dpi"]) > dpi
+    assert _canvas_dpi(layout, 560.0, 400.0) is None  # a normal diagram: matplotlib's dpi

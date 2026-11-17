@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import streamlit as st
+import yaml
 from streamlit.testing.v1 import AppTest
 
 from whsizing.app import calls, demo, demo_limits, state
@@ -190,6 +191,25 @@ def test_the_shared_example_is_sized_and_compared_while_one_visitor_holds_the_lo
     monkeypatch.setattr(demo, "call", spy)
     demo.size_demo(run, ROOT / "catalog")
     assert held == [True, True], held
+
+
+# ---------------------------------------------- a plan too large to draw (page 6)
+def test_a_plan_too_large_to_draw_is_a_message_on_page_6_not_an_exception(run: Path) -> None:
+    """A utilisation of 1e-7 is a plain number the form takes and the engine sizes (a plan of
+    thousands of km2); the block diagram of it used to raise (FreeType: invalid ppem value) and
+    page 6 with it. Now the diagram that cannot be drawn is a message of its own."""
+    draft = run / "ui" / "basis.yaml"
+    basis = yaml.safe_load(draft.read_text(encoding="utf-8"))
+    draft.write_text(
+        yaml.safe_dump({**basis, "operations": {**basis["operations"], "utilisation": 1e-7}}),
+        encoding="utf-8",
+    )
+    demo.size_demo(run, ROOT / "catalog")
+    at = page("6_Results.py", run)
+    assert not at.exception
+    shown = " ".join(e.value for e in at.error)
+    assert "too large to draw" in shown and "design basis" in shown, shown
+    assert os.environ["WHSIZING_RUNS"] not in shown
 
 
 # ------------------------------------------------------------------- a forged click

@@ -62,8 +62,9 @@ Several other numeric fields (`operations.utilisation` of 1e-5, a `building.area
 the sized plan of the building becomes tens of square kilometres, and the block diagram measured its
 labels on a raster canvas of that size (2.4 to 4.6 GB at the peak of page 6). That is bounded where
 it happens, in `report/diagram.py` (the canvas of a plan beyond 4 million pixels is measured at a
-lower resolution: 1.1 GB for each of those inputs, as for the demo's own), so none of those fields
-has a limit of its own.
+lower resolution: 1.1 GB for each of those inputs, as for the demo's own; a plan beyond about 30 km2,
+which no warehouse is, is not drawn: page 6 and the report say so and name the design basis), so none of
+those fields has a limit of its own.
 
 Also: at most two heavy page computations at a time (`loaders.HEAVY_AT_ONCE`: eight at once took
 the process from 0.9 to 2.8 GB), and the messages a visitor sees show `<runs>` where the server's

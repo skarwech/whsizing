@@ -17,6 +17,7 @@ from whsizing.app.calls import CliError, call, printed_paths
 from whsizing.app.strings import tr
 from whsizing.cli._runio import COMPARISON_FILE
 from whsizing.cli.sizing import report_cmd
+from whsizing.errors import WhsizingError
 from whsizing.report import Lang, ReportData, build_diagram, chart_png, render_cell, unit_label
 from whsizing.schemas import Cell, ReportTable, TableBlock, TableColumn, TableRow
 
@@ -164,9 +165,11 @@ def diagrams(data: ReportData) -> None:
     looking at a run never writes into it)."""
     with tempfile.TemporaryDirectory() as tmp:
         for sid in data.computed():
-            svg = build_diagram(data, sid, Path(tmp)).read_text(encoding="utf-8")
             st.caption(f"{sid} - {data.run.results[sid].scenario.name}")
-            st.image(svg)
+            try:
+                st.image(build_diagram(data, sid, Path(tmp)).read_text(encoding="utf-8"))
+            except WhsizingError as e:  # a plan too large to draw: the other scenarios still show
+                state.error(str(e))
 
 
 # ------------------------------------------------------------------------------------ export
