@@ -2847,6 +2847,9 @@ ui = [
 ]
 
 [package.dev-dependencies]
+app = [
+    { name = "streamlit" },
+]
 dev = [
     { name = "hypothesis" },
     { name = "openpyxl" },
@@ -2889,6 +2892,7 @@ requires-dist = [
 provides-extras = ["ui"]
 
 [package.metadata.requires-dev]
+app = [{ name = "streamlit" }]
 dev = [
     { name = "hypothesis" },
     { name = "openpyxl" },

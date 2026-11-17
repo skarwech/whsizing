@@ -6,7 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from whsizing.app import entry, ingest_ui, state
+from whsizing.app import demo, demo_ui, entry, ingest_ui, state
 from whsizing.app.strings import tr
 from whsizing.io.readers import read_any
 from whsizing.report import Lang
@@ -56,6 +56,10 @@ def ingest_section(
 def main(uploaded: list[Path]) -> None:
     """The page. `uploaded` collects the disk copies of the uploads (deleted by the caller)."""
     lg, run = entry.setup("upload.title")
+    if demo.demo_only():  # the public demo takes no upload and reads no server path
+        st.warning(tr("demo.upload_disabled", lg))
+        demo_ui.section(lg)
+        st.stop()
     st.caption(tr("upload.privacy", lg))
     dataset: DatasetKind = st.selectbox(tr("upload.dataset", lg), DATASET_ORDER, key="up.dataset")
     if dataset != "sku_master":

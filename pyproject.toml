@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ui = ["streamlit"]
+ui = ["streamlit"]  # pip install "whsizing[ui]"
 
 [project.scripts]
 whsizing = "whsizing.cli:app"
@@ -48,6 +48,13 @@ dev = [
     "openpyxl",
     "pypdf",
 ]
+# The Streamlit app, in a default group so that a plain `uv sync` installs it too (a host that syncs
+# the lock without extras, as Streamlit Community Cloud may, would otherwise miss streamlit_app.py's
+# dependency); `pip install "whsizing[ui]"` is the extra above.
+app = ["streamlit"]
+
+[tool.uv]
+default-groups = ["dev", "app"]
 
 [build-system]
 requires = ["uv_build>=0.8,<0.13"]
@@ -71,7 +78,7 @@ ignore = [
 
 [tool.pyright]
 pythonVersion = "3.12"
-include = ["src", "tests"]
+include = ["src", "tests", "streamlit_app.py"]
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic"

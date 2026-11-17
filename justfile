@@ -9,8 +9,8 @@ default:
 
 # ruff lint + format check
 lint:
-    uv run ruff check src tests
-    uv run ruff format --check src tests
+    uv run ruff check src tests streamlit_app.py
+    uv run ruff format --check src tests streamlit_app.py
 
 # pyright: strict on schemas/, engine/, finance/; basic elsewhere (pyproject.toml)
 typecheck:
@@ -56,3 +56,8 @@ docs:
 # export WHSIZING_SALT=<secret> first, or type the salt on page 1.
 app:
     uv run streamlit run src/whsizing/app/Home.py --server.address 127.0.0.1
+
+# The public demo (streamlit_app.py: synthetic data only, no upload) on this machine: the same app
+# Streamlit Community Cloud serves (docs/DEPLOY_STREAMLIT.md).
+demo-app:
+    uv run streamlit run streamlit_app.py --server.address 127.0.0.1

@@ -5,13 +5,16 @@ A command is called as a Python function (Typer defaults are the plain defaults)
 stdout / stderr like in a terminal and `handle_errors` turns an error into `typer.Exit(code)`
 after writing the message to stderr: both are captured here and come back as `CliError`.
 
-ponytail: `redirect_stdout` is process-wide, fine for the one-user local app; a multi-user
-server would run the CLI in a subprocess instead.
+ponytail: `redirect_stdout` and the stage timings of `whsizing.logging` are process-wide, so the
+commands run one at a time (`_LOCK`): enough for the one-user local app and for the hosted demo
+(a few visitors, each command a few seconds); a busy multi-user server would run the CLI in a
+subprocess per call instead.
 """
 
 from __future__ import annotations
 
 import io
+import threading
 from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
@@ -21,6 +24,7 @@ from typing import Any
 import typer
 
 HINTS = ("(traceback in", "(no run folder;")  # what `handle_errors` appends to an exit 1
+_LOCK = threading.RLock()  # one command at a time (see the module docstring)
 
 
 @dataclass(frozen=True)
@@ -47,12 +51,13 @@ class CliError(Exception):
 def call(command: Callable[..., Any], **kwargs: Any) -> CliResult:
     """`command(**kwargs)` with its output captured; `CliError` on a non-zero exit."""
     out, err = io.StringIO(), io.StringIO()
-    try:
-        with redirect_stdout(out), redirect_stderr(err):
-            command(**kwargs)
-    except typer.Exit as e:
-        if e.exit_code:
-            raise CliError(e.exit_code, _message(err.getvalue())) from e
+    with _LOCK:
+        try:
+            with redirect_stdout(out), redirect_stderr(err):
+                command(**kwargs)
+        except typer.Exit as e:
+            if e.exit_code:
+                raise CliError(e.exit_code, _message(err.getvalue())) from e
     return CliResult(out.getvalue(), err.getvalue())
 
 

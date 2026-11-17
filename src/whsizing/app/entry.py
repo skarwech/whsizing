@@ -13,7 +13,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from whsizing.app import state
+from whsizing.app import demo, state
 from whsizing.report import Lang
 
 PARAM = "run"
@@ -21,12 +21,15 @@ PARAM = "run"
 
 def safe_run_name(root: Path, ref: str | None) -> str | None:
     """`ref` when it is the bare name of a run folder that lives directly under `root` (a symlink
-    to a run elsewhere is not under it), else None; a name the filesystem refuses is no run."""
+    to a run elsewhere is not under it), else None; a name the filesystem refuses is no run. In
+    the public demo only the demo's own runs count."""
     if not ref or ref in (".", "..") or Path(ref).name != ref:
         return None
     folder = root / ref
     try:  # a name over the filesystem limit (255 bytes) makes the stat raise ENAMETOOLONG
-        return ref if state.is_run(folder) and folder.resolve().parent == root.resolve() else None
+        if not (state.is_run(folder) and folder.resolve().parent == root.resolve()):
+            return None
+        return ref if not demo.demo_only() or demo.is_demo_run(folder) else None
     except OSError:
         return None
 

@@ -29,6 +29,11 @@ from whsizing.report import Lang, ReportData, load_report_data
 from whsizing.schemas import DemandProfile, DesignBasis, DesignDay
 from whsizing.schemas.run import RunOutput
 
+# A hosted server keeps these results for every visitor's run: bound the memory (an entry is the
+# tables or figures of one run: about 30 MB for the report model with its traces). Locally the
+# bound is never reached.
+CACHE = {"show_spinner": False, "max_entries": 8, "ttl": 6 * 3600}
+
 PROFILE_FIGURES = (
     "daily_lines",
     "monthly_index",
@@ -63,7 +68,7 @@ def canonical_digest(run: Path) -> str:
     return h.hexdigest()[:16]
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(**CACHE)
 def tables_hash(run: str, digest: str) -> str:
     """`dataset_hash` of the run's canonical tables, the value `DemandProfile.dataset_hash` holds
     when the profile was made from them (`digest`: `canonical_digest`, so that it is computed once
@@ -72,27 +77,27 @@ def tables_hash(run: str, digest: str) -> str:
     return dataset_hash(load_canonical(Path(run) / "canonical"))
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(**CACHE)
 def catalog_of(path: str, digest: str) -> Catalog:
     """The catalog folder, loaded once per content (`digest_of(folder)`)."""
     del digest
     return load_catalog(path)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(**CACHE)
 def output(run: str, digest: str) -> RunOutput:
     """The sized and compared run (`digest`: `state.run_digest`)."""
     del digest
     return load_run(Path(run))
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(**CACHE)
 def report_data(run: str, lang: Lang, digest: str) -> ReportData:
     """Everything the report reads, with its tables and the traces (F9a)."""
     return load_report_data(output(run, digest), lang)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(**CACHE)
 def profile_view(
     run: str, dataset_hash: str, basis_file: str, basis_digest: str
 ) -> tuple[DemandProfile, dict[str, go.Figure]]:
@@ -106,7 +111,7 @@ def profile_view(
     return profile, {name: CHARTS[name](profile, tables)[1] for name in PROFILE_FIGURES}
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(**CACHE)
 def design_preview(
     run: str, canonical_key: str, basis_json: str, catalog_path: str, catalog_key: str
 ) -> DesignDay:

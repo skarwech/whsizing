@@ -103,11 +103,12 @@ safest data minimisation is a request that does not ask for the sensitive column
   carrying client data: started **headless** (`--server.headless true`, typical in Docker or on a
   server) it makes a best-effort request to `checkip.amazonaws.com` at start-up to print an
   "External URL" (`net_util.get_external_ip`), and started non-headless it opens a UDP `connect()` to
-  8.8.8.8 to learn the machine's internal IP (no packet is sent). Setting `server.address`, as the
-  shipped `.streamlit/config.toml` and `just app` do (`127.0.0.1`), avoids the lookups. The same
-  setting keeps the app **loopback-only**: it has no authentication, so any other binding (a LAN or
-  hosted deployment, C6) is a separate, deliberate step behind a reverse proxy with TLS and basic
-  auth. C2 step 5 asks for written consent before any external call on client data: no call
+  8.8.8.8 to learn the machine's internal IP (no packet is sent). Setting `server.address`, as
+  `just app` does (`127.0.0.1`), avoids the lookups. The same setting keeps the app
+  **loopback-only**: it has no authentication, so the full app **refuses to start** on any other
+  address (`WHSIZING_ALLOW_REMOTE=1` says an authenticating proxy is in front: a separate, deliberate
+  step, C6). The public demo (`streamlit_app.py`, `docs/DEPLOY_STREAMLIT.md`) is the one exception:
+  synthetic data only, no upload, no typed server path; never put client data in a hosted copy. C2 step 5 asks for written consent before any external call on client data: no call
   carries client data in this version.
 - **Hashing at ingestion.** `HMAC-SHA256(salt, id)[:16]` on order id, SKU, receipt id and customer;
   `description` and customer columns dropped by default; the correspondence table is never written;

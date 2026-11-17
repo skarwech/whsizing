@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import ast
 import re
+import shutil
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -60,7 +62,17 @@ def test_T10_4_streamlit_config_turns_telemetry_off_and_allows_1_gb_uploads() ->
     config = tomllib.loads((ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert config["browser"]["gatherUsageStats"] is False
     assert config["server"]["maxUploadSize"] == 1024
-    assert config["server"]["address"] == "127.0.0.1"  # no authentication: loopback only
+
+
+def test_T10_4_loopback_is_enforced_by_the_commands_and_the_app_not_by_the_shared_config() -> None:
+    """`.streamlit/config.toml` is read by every way of serving the app, the platform that hosts
+    the public demo included, which must reach it: no `address` there. The full app has no
+    authentication, so `just app` binds loopback and the app refuses any other address."""
+    config = tomllib.loads((ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert "address" not in config["server"]
+    justfile = (ROOT / "justfile").read_text(encoding="utf-8")
+    assert "streamlit run src/whsizing/app/Home.py --server.address 127.0.0.1" in justfile
+    assert "streamlit run streamlit_app.py --server.address 127.0.0.1" in justfile
 
 
 def test_T10_4_justfile_has_an_app_recipe_that_starts_the_home_page() -> None:
@@ -121,3 +133,39 @@ def test_T10_4_banner_text_comes_from_the_report_i18n(lang: str) -> None:
     text = t("banner.indicative", lang)  # type: ignore[arg-type]
     assert MISSING_PREFIX not in text and len(text) > 20
     assert t("banner.indicative", "fr") != t("banner.indicative", "en")
+
+
+# ------------------------------------------------------------------------- hosted demo files
+def test_T10_4_packages_txt_lists_the_debian_packages_weasyprint_needs() -> None:
+    """Streamlit Community Cloud installs `packages.txt` with apt before the app starts. A name that
+    is not a Debian package fails the whole deployment, so each line must look like one, and the
+    set of the WeasyPrint documentation for Debian (Pango, its FreeType glue, harfbuzz-subset)
+    must be there, or the PDF report cannot be built on the host."""
+    lines = (ROOT / "packages.txt").read_text(encoding="utf-8").split()
+    assert lines and len(set(lines)) == len(lines)
+    assert all(re.fullmatch(r"[a-z0-9][a-z0-9+.-]+", name) for name in lines), lines
+    assert {"libpango-1.0-0", "libpangoft2-1.0-0", "libharfbuzz-subset0"} <= set(lines)
+    assert any(name.startswith("fonts-") for name in lines)  # a PDF needs at least one font
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "libharfbuzz-subset0" in dockerfile  # the image and the host use the same list
+
+
+def test_T10_4_streamlit_is_a_default_dependency_group_of_the_lock_the_host_reads() -> None:
+    """Community Cloud reads `uv.lock` first: a plain `uv sync` has to install Streamlit, so it is
+    in a default dependency group (the optional extra is for pip)."""
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "streamlit" in project["dependency-groups"]["app"]
+    assert "app" in project["tool"]["uv"]["default-groups"]
+    assert "streamlit" in project["project"]["optional-dependencies"]["ui"]
+    lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
+    assert 'name = "streamlit"' in lock
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv not installed")
+def test_T10_4_uv_lock_is_current() -> None:
+    """The host installs exactly what the lock says: a lock that no longer matches
+    `pyproject.toml` would be re-resolved there, or refused."""
+    done = subprocess.run(
+        ["uv", "lock", "--check"], cwd=ROOT, capture_output=True, text=True, timeout=300
+    )
+    assert done.returncode == 0, done.stdout[-1500:] + done.stderr[-1500:]

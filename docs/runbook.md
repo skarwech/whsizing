@@ -587,11 +587,15 @@ dataset or the basis. Nodes exist per world (`lo`, `typ`, `hi`); the tree above 
 
 ```bash
 export WHSIZING_SALT=<secret>        # or type the salt on page 1
-just app                             # = uv run streamlit run src/whsizing/app/Home.py
+just app                             # = uv run streamlit run src/whsizing/app/Home.py --server.address 127.0.0.1
+just demo-app                        # the public demo: synthetic data only, no upload (streamlit_app.py)
 ```
 
 Run it **from the repository root** so `.streamlit/config.toml` applies (`maxUploadSize` 1024 MB;
-usage statistics off; larger files: use the CLI). Six pages: 1 Upload & mapping, 2 Data quality,
+usage statistics off; larger files: use the CLI). The full app has no authentication: it refuses to
+start unless Streamlit's `server.address` is `127.0.0.1` (`just app` sets it) or
+`WHSIZING_ALLOW_REMOTE=1` is set. `streamlit_app.py` is the demo that is deployed on Streamlit
+Community Cloud: see `docs/DEPLOY_STREAMLIT.md`. Six pages: 1 Upload & mapping, 2 Data quality,
 3 Demand profile, 4 Design basis, 5 Scenarios, 6 Results (comparison, FTE chart, block diagrams,
 business case, the "why this number?" drill-down, export buttons). The UI has no logic of its own:
 it calls the library and writes the same run folders as the CLI (`WHSIZING_RUNS`, default `runs/`;

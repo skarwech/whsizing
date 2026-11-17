@@ -18,7 +18,9 @@ from typing import Any, Literal, cast
 
 import streamlit as st
 import yaml
+from streamlit.errors import StreamlitAPIException
 
+from whsizing.app import demo
 from whsizing.app.strings import tr
 from whsizing.errors import WhsizingError
 from whsizing.report import LANGS, Lang, t
@@ -27,6 +29,8 @@ RUN, MAPPING, BASIS, SCENARIOS, LANG = "run_dir", "mapping", "basis", "scenarios
 RESTORED = "_restored_run"  # the run whose files filled the other keys
 NO_RUN = "_no_run"  # the user asked for a new run: no fallback to the newest one
 RUNS_ENV, CATALOG_ENV, LANG_ENV = "WHSIZING_RUNS", "WHSIZING_CATALOG", "WHSIZING_LANG"
+ALLOW_REMOTE_ENV = "WHSIZING_ALLOW_REMOTE"  # "1": the deployer vouches for an authenticating proxy
+LOOPBACK = ("127.0.0.1", "localhost", "::1")
 UI_DIR = "ui"
 Stage = Literal["empty", "ingested", "profiled", "sized", "compared"]
 STAGES: tuple[Stage, ...] = ("empty", "ingested", "profiled", "sized", "compared")
@@ -40,9 +44,32 @@ def catalog_dir() -> Path:
     return Path(os.environ.get(CATALOG_ENV, "catalog"))
 
 
+def browser_lang() -> Lang:
+    """French for a French browser, English otherwise (the public demo assumes no language).
+    `st.context.locale` is None outside a browser session (tests, bare mode)."""
+    try:
+        locale = st.context.locale or ""
+    except (AttributeError, RuntimeError, StreamlitAPIException):
+        locale = ""
+    return "fr" if locale.lower().startswith("fr") else "en"
+
+
 def default_lang() -> Lang:
-    value = os.environ.get(LANG_ENV, "fr")
-    return "en" if value == "en" else "fr"
+    """`WHSIZING_LANG` when it names a language, else the browser's (public demo), else French."""
+    value = os.environ.get(LANG_ENV)
+    if value in LANGS:
+        return cast(Lang, value)
+    return browser_lang() if demo.demo_only() else "fr"
+
+
+def exposed_without_auth() -> bool:
+    """True when the full app (uploads, a typed server path, every run on disk) is served on an
+    address the network can reach: it has no authentication. The demo (`streamlit_app.py`, synthetic
+    data, nothing to read) and `WHSIZING_ALLOW_REMOTE=1` (an authenticating proxy in front) are
+    exempt. `just app` passes `--server.address 127.0.0.1`."""
+    if demo.demo_only() or os.environ.get(ALLOW_REMOTE_ENV) == "1":
+        return False
+    return str(st.get_option("server.address") or "") not in LOOPBACK
 
 
 # ----------------------------------------------------------------------------- run discovery
@@ -200,13 +227,26 @@ def run_state(run: Path) -> dict[str, Any]:
     }
 
 
-def restore(session: MutableMapping[str, Any], query: Mapping[str, str], root: Path) -> Path | None:
+def restore(
+    session: MutableMapping[str, Any],
+    query: Mapping[str, str],
+    root: Path,
+    *,
+    isolated: bool = False,
+) -> Path | None:
     """Make `session` hold a run folder and its state: the session's own run, else `?run=`, else
-    the newest run. The other keys are rebuilt from the folder when the run changed."""
+    the newest run. The other keys are rebuilt from the folder when the run changed. `isolated`
+    (the public demo, where visitors share the server): only demo runs, and never the newest one,
+    which belongs to another visitor."""
     run = None
     if not session.get(NO_RUN):
-        run = resolve_run(root, session.get(RUN)) or resolve_run(root, query.get("run"))
-        run = run or next(iter(list_runs(root)), None)
+        for ref in (session.get(RUN), query.get("run")):
+            found = resolve_run(root, ref)
+            if found is not None and (not isolated or demo.is_demo_run(found)):
+                run = found
+                break
+        if run is None and not isolated:
+            run = next(iter(list_runs(root)), None)
     if run is None:
         session.pop(RUN, None)
         return None
@@ -241,8 +281,16 @@ def lang() -> Lang:
 
 def init() -> Path | None:
     """Restore the session from the URL or the disk; keep `?run=` pointing at the run."""
-    st.session_state.setdefault(LANG, default_lang())
-    run = restore(cast(MutableMapping[str, Any], st.session_state), st.query_params, runs_root())
+    # Assign, not `setdefault`: after a page switch the key still holds the language of the
+    # previous page's radio, as stale state that a new radio ignores (it starts at "fr"); only a
+    # value assigned in this run is honoured (Streamlit's "re-assign the key on every page").
+    st.session_state[LANG] = st.session_state.get(LANG, default_lang())
+    run = restore(
+        cast(MutableMapping[str, Any], st.session_state),
+        st.query_params,
+        runs_root(),
+        isolated=demo.demo_only(),
+    )
     if run is not None and st.query_params.get("run") != run.name:
         st.query_params["run"] = run.name
     return run
@@ -251,9 +299,14 @@ def init() -> Path | None:
 def setup(title_key: str) -> tuple[Lang, Path | None]:
     """First call of every page: page config, state restore, language switch, run summary."""
     st.set_page_config(page_title="whsizing", layout="wide")
+    if exposed_without_auth():
+        st.error(tr("guard.exposed", default_lang()))
+        st.stop()
     run = init()
     st.sidebar.radio("Langue / Language", LANGS, key=LANG, horizontal=True)
     lg = lang()
+    if demo.demo_only():
+        st.sidebar.info(tr("demo.banner", lg))
     if run is not None:
         st.sidebar.caption(f"{tr('run', lg)}: {run.name} ({stage(run)})")
     st.title(tr(title_key, lg))

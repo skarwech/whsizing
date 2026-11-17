@@ -21,6 +21,16 @@ On a laptop it takes about twenty seconds. The salt anonymises identifiers (HMAC
 real one outside the repository. PDF needs Pango: on macOS `brew install pango` and, if
 `import weasyprint` fails, `export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` (the justfile does).
 
+## Demo on Streamlit
+
+```bash
+just demo-app      # synthetic e-commerce site, three scenarios, no upload: http://localhost:8501
+```
+
+`streamlit_app.py` is the entry point to deploy on [Streamlit Community Cloud](https://share.streamlit.io)
+(Main file path `streamlit_app.py`); `docs/DEPLOY_STREAMLIT.md` has the steps, what the hosted demo allows
+and what was checked. The full app for real client files stays local: `just app`.
+
 ## Layout
 
 ```
@@ -40,7 +50,8 @@ docs/           methodology, runbook, pilot guide, assumptions, interpretations 
 just test          # ruff, pyright, then pytest (unit, golden, property, e2e; not the bench marker)
 just test-fast     # unit tests only
 uv run pytest tests/unit/test_f5_*.py -q       # one feature
-just app           # optional Streamlit app (export WHSIZING_SALT first)
+just app           # the full Streamlit app, loopback only (export WHSIZING_SALT first)
+just demo-app      # the public demo: synthetic data, no upload
 ```
 
 Test ids follow `test_T<feature>_<n>_...` in `tests/**/test_f<feature>_*.py`. `just --list` shows every
@@ -52,6 +63,7 @@ root, never the system Python. `just demo` runs the quickstart (synthetic data, 
 
 - [`docs/runbook.md`](docs/runbook.md): install, environment, every command with real output, run
   folder, exit codes, troubleshooting.
+- [`docs/DEPLOY_STREAMLIT.md`](docs/DEPLOY_STREAMLIT.md): the Streamlit demo, locally and on Community Cloud.
 - [`docs/PILOT.md`](docs/PILOT.md): pilot checklist, data protection, how to read the report, calibration and
   expert reviews.
 - [`docs/methodology.md`](docs/methodology.md): every formula, its rationale, hidden assumptions, worked numbers,

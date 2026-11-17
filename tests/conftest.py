@@ -21,6 +21,14 @@ except (ImportError, OSError) as e:  # OSError: Pango/GObject shared library not
     WEASYPRINT_ERROR = f"WeasyPrint/Pango unavailable: {e}. On macOS: brew install pango"
 
 
+@pytest.fixture(autouse=True)
+def _app_may_listen_anywhere(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The full Streamlit app refuses to start on an address the network can reach (it has no
+    authentication, `state.exposed_without_auth`); AppTest has no server address at all, so the
+    tests that run its pages say they vouch for it. The guard's own tests remove this."""
+    monkeypatch.setenv("WHSIZING_ALLOW_REMOTE", "1")
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if WEASYPRINT_ERROR is None:
         return

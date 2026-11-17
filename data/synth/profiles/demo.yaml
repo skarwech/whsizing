@@ -1,0 +1,75 @@
+# Demo site of the Streamlit demo (src/whsizing/app/demo.py): ecom_mid scaled down to about 370,000
+# order lines over 18 months so that the whole pipeline runs in seconds on a small hosted instance
+# (ecom_mid has 1 M lines). Same structure and defaults as ecom_mid; only the scale differs.
+name: demo
+
+# Scale
+n_skus: 3000
+start_date: 2024-01-01
+n_days: 548
+orders_per_day_mean: 400          # `base` of λ_d
+
+# SKU master: lognormal dims (L, W, H) in mm and weight in kg
+mu_log_mm: [5.3, 4.9, 4.4]
+sigma_log_mm: 0.5
+mu_log_kg: -0.7
+sigma_log_kg: 0.9
+units_per_case_values: [1, 6, 12, 24]
+units_per_case_weights: [0.4, 0.3, 0.2, 0.1]   # F1 choice
+pallet_dims_m: [1.2, 0.8, 1.2]                 # cases_per_pallet = floor(pallet cube / case cube)
+n_categories: 8
+
+# Popularity
+zipf_s: 1.1
+inactive_share: 0.10
+
+# Order structure: lines = 1 w.p. 0.55 else 1 + Poisson(2.2); B2C units/line = 1 + Poisson(0.4)
+single_line_prob: 0.55
+extra_lines_mean: 2.2
+units_per_line_extra_mean: 0.4
+cases_per_line_extra_mean: 1.0    # F1 choice: B2B units/line = case × (1 + Poisson(1.0))
+channel_shares: {B2C: 1.0}        # F1 choice
+
+# Calendar: weekday 0 = Monday; month index averages 1.0 with the Q4 peak at 1.6
+weekday_weights: [1.15, 1.10, 1.05, 1.00, 0.95, 0.35, 0.0]
+month_index: [0.9, 0.85, 0.9, 0.95, 0.95, 0.9, 0.85, 0.75, 0.95, 1.0, 1.4, 1.6]
+promos:                           # dates are F1 choices (Black Friday, summer sales)
+  - {date: 2024-06-26, multiplier: 2.0, duration_days: 3}
+  - {date: 2024-11-29, multiplier: 2.0, duration_days: 3}
+  - {date: 2025-06-25, multiplier: 2.0, duration_days: 3}
+annual_growth: 0.05
+
+# Intraday: peaks 10-12 h and 14-16 h (F1 choice of shape); cut-off at 15:00
+hourly_weights: [0.2, 0.1, 0.05, 0.05, 0.05, 0.1, 0.3, 0.6, 1.0, 1.4, 1.8, 1.8,
+                 1.3, 1.2, 1.7, 1.6, 1.0, 0.9, 0.9, 0.9, 0.8, 0.7, 0.5, 0.3]
+cutoff_hour: 15
+cutoff_boost: 1.25                # F1 choice: weight of 14:00-15:00 × 1.25
+
+# Flows
+returns_rate: 0.04
+return_delay_days: [3, 20]
+cancel_rate: 0.01
+days_of_cover: 25
+stock_noise_sigma: 0.2            # F1 choice
+receipt_hour: 7                   # F1 choice: receipts weekly (Monday) 07:00-15:00
+
+# Step 9 defect injector, applied to the CSV exports only with `--defects`
+defects:
+  bom: true
+  cp1252: false                   # b2b_cases exercises cp1252
+  mixed_date_formats: true
+  missing_dims: true
+  orphan_skus: true
+  duplicate_rows: true
+  negative_quantities: true
+  trailing_spaces: true
+  thousand_separators: true
+  second_header_row: true
+  cm_instead_of_mm: true
+  missing_dims_share: 0.08
+  orphan_skus_share: 0.02
+  duplicate_rows_share: 0.005
+  cm_rows_share: 0.30
+  mixed_dates_share: 0.10         # F1 choice
+  negative_qty_share: 0.01        # F1 choice
+  trailing_spaces_share: 0.05     # F1 choice

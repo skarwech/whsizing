@@ -1,7 +1,9 @@
 # whsizing Streamlit wrapper (F10b): client data stays on this machine.
 [browser]
-gatherUsageStats = false  # no telemetry
+gatherUsageStats = false  # no telemetry (Streamlit Community Cloud sets its own value for a hosted app)
 
 [server]
-address = "127.0.0.1"   # loopback only: the app has no authentication (local use, C2 / hosting = local)
 maxUploadSize = 1024      # MB; larger files: use `whsizing ingest` (the CLI)
+# No `address` here, on purpose. `just app` passes --server.address 127.0.0.1 (the full app has no
+# authentication, and refuses to start on a reachable address: state.exposed_without_auth), while
+# the public demo (streamlit_app.py, synthetic data) must be reachable by the platform that hosts it.

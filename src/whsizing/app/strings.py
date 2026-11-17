@@ -46,6 +46,73 @@ UI: dict[str, tuple[str, str]] = {
         "1 Upload and mapping\n2 Data quality\n3 Demand profile\n4 Design basis\n5 Scenarios\n"
         "6 Results",
     ),
+    # -- demo (Streamlit Community Cloud demo, or the demo data of the local app)
+    "demo.title": ("Démo sur données synthétiques", "Demo on synthetic data"),
+    "demo.intro": (
+        "Un site e-commerce fictif (environ 370 000 lignes de commande sur 18 mois), généré à la "
+        "demande : rien n'est téléversé. L'exemple terminé ouvre les résultats d'une étude "
+        "complète (trois scénarios, finance, sensibilité) ; le pas à pas charge seulement les "
+        "données, puis vous suivez les pages 2 à 6 et pouvez modifier la base de conception.",
+        "A fictitious e-commerce site (about 370,000 order lines over 18 months), generated on "
+        "demand: nothing is uploaded. The finished example opens the results of a complete study "
+        "(three scenarios, finance, sensitivity); step by step only loads the data, then you "
+        "follow pages 2 to 6 and can change the design basis.",
+    ),
+    "demo.example": (
+        "Ouvrir l'exemple terminé (≈ 30 s la première fois)",
+        "Open the finished example (≈ 30 s the first time)",
+    ),
+    "demo.load": ("Charger les données de démo (pas à pas)", "Load the demo data (step by step)"),
+    "demo.building": (
+        "Génération des données synthétiques, import, dimensionnement des trois scénarios, "
+        "finance et sensibilité…",
+        "Generating the synthetic data, ingesting it, sizing the three scenarios, finance and "
+        "sensitivity…",
+    ),
+    "demo.loading": (
+        "Génération et import des données synthétiques…",
+        "Generating and ingesting the synthetic data…",
+    ),
+    "demo.loaded": (
+        "Données de démo chargées dans le run {run}. Suivez les pages 2 à 6.",
+        "Demo data loaded into run {run}. Follow pages 2 to 6.",
+    ),
+    "demo.next": (
+        "Le run de démo est ouvert : choisissez la page 6 (Résultats) dans le menu.",
+        "The demo run is open: pick page 6 (Results) in the menu.",
+    ),
+    "demo.error": (
+        "La démo a échoué (code {code}) : {message}",
+        "The demo failed (code {code}): {message}",
+    ),
+    "demo.banner": (
+        "Démo publique sur données synthétiques. Aucun téléversement : ne saisissez aucune "
+        "donnée client. Pour vos propres fichiers, installez l'outil sur votre machine (README).",
+        "Public demo on synthetic data. No upload: do not enter any client data. For your own "
+        "files, install the tool on your machine (README).",
+    ),
+    "demo.hosted": (
+        "Démo hébergée : données synthétiques uniquement, générées à la demande.",
+        "Hosted demo: synthetic data only, generated on demand.",
+    ),
+    "demo.upload_disabled": (
+        "Le téléversement est désactivé sur la démo publique : les données client ne doivent "
+        "pas quitter votre machine. Utilisez les données de démo ci-dessous, ou installez l'outil "
+        "en local pour vos fichiers.",
+        "Uploads are disabled on the public demo: client data must not leave your machine. Use "
+        "the demo data below, or install the tool locally for your files.",
+    ),
+    "guard.exposed": (
+        "Cette application n'a pas d'authentification : elle refuse de démarrer sur une adresse "
+        "accessible du réseau. Lancez-la avec `just app` (adresse 127.0.0.1), ou avec "
+        "`--server.address 127.0.0.1`. Derrière un proxy authentifié, définissez "
+        "WHSIZING_ALLOW_REMOTE=1. Pour une démo publique sur données synthétiques, "
+        "utilisez `streamlit_app.py`.",
+        "This app has no authentication: it refuses to start on an address the network can "
+        "reach. Start it with `just app` (address 127.0.0.1) or with "
+        "`--server.address 127.0.0.1`. Behind an authenticating proxy, set "
+        "WHSIZING_ALLOW_REMOTE=1. For a public demo on synthetic data use `streamlit_app.py`.",
+    ),
     # -- page 1
     "upload.title": ("1 Téléversement et mapping", "1 Upload and mapping"),
     "upload.privacy": (
