@@ -372,3 +372,59 @@ def test_R7_2_a_label_goes_inside_a_zone_only_when_it_fits_else_the_legend_names
             box = probe.get_window_extent(renderer)
             probe.remove()
             assert box.width > 0.8 * (x1 - x0) or box.height > 0.8 * (y1 - y0), zone
+
+
+# ---------------------------------------------------------- the canvas that measures the labels
+@pytest.mark.parametrize("area_m2", [5e6, 5e7])  # 158 MB and 1.5 GB of canvas without the guard
+def test_T9_6_the_canvas_that_measures_the_labels_is_bounded_whatever_the_building(
+    run: RunOutput, area_m2: float
+) -> None:
+    """The drawing is a vector SVG, but its labels are measured on a raster canvas: a 50 km2
+    building took 20,000 x 20,000 px of RGBA (1.5 GB). A public demo met it through ten different
+    inputs (a utilisation of 1e-5, a growth rate of 9, a shift of seconds, ...)."""
+    from whsizing.report.diagram import CANVAS_BUDGET_PX, draw_diagram
+
+    layout = layout_blocks(zones_of(run, "S1"), area_m2, "S1")
+    fig = draw_diagram(layout, report_data(run, "en"))
+    width, height = fig.canvas.get_width_height()  # pyright: ignore[reportAttributeAccessIssue]
+    assert 0 < width * height <= CANVAS_BUDGET_PX * 1.05
+
+
+def test_T9_6_a_normal_diagram_keeps_matplotlibs_dpi_and_a_huge_one_still_gets_its_svg(
+    run: RunOutput, data: ReportData, tmp_path: Path
+) -> None:
+    import matplotlib
+
+    from whsizing.report.diagram import draw_diagram
+
+    normal = layout_blocks(zones_of(run, "S1"), run.results["S1"].area.building_m2, "S1")
+    assert draw_diagram(normal, data).dpi == pytest.approx(matplotlib.rcParams["figure.dpi"])
+    res = run.results["S1"]
+    area = res.area.model_copy(update={"building_m2": 5e7})
+    huge = run.model_copy(
+        update={"results": {**run.results, "S1": res.model_copy(update={"area": area})}}
+    )
+    svg = build_diagram(dataclasses.replace(data, run=huge), "S1", tmp_path).read_text("utf-8")
+    assert (
+        svg.startswith("<?xml") and sum(a for _, a in svg_pieces(svg)) > 0
+    )  # a drawing, not an error
+
+
+@pytest.mark.parametrize("area_m2", [1e8, 1e12, 1e18])
+def test_T9_6_the_dpi_of_the_measuring_canvas_follows_the_budget_down_to_absurd_plans(
+    area_m2: float,
+) -> None:
+    """Pure arithmetic (an unguarded canvas of these plans would not even allocate): a dpi that
+    keeps the canvas within the budget, never zero, and matplotlib's own for a normal plan."""
+    import math
+
+    import matplotlib
+
+    from whsizing.report.diagram import CANVAS_BUDGET_PX, PT_PER_INCH, PX_PER_M, _canvas_dpi
+
+    side_px = math.sqrt(area_m2) * PX_PER_M + 300  # the margins and the legend column
+    dpi = _canvas_dpi(side_px, side_px)
+    assert dpi is not None and dpi > 0
+    assert (side_px / PT_PER_INCH * dpi) ** 2 <= CANVAS_BUDGET_PX * 1.0001
+    assert _canvas_dpi(560.0, 400.0) is None  # a normal diagram: matplotlib's dpi
+    assert float(matplotlib.rcParams["figure.dpi"]) > dpi

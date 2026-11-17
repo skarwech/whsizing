@@ -30,7 +30,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from matplotlib import rc_context
+from matplotlib import rc_context, rcParams
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import RendererBase
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -58,6 +58,7 @@ LABEL_FONT_PX = 8.0  # in a zone, "Building N m2", "Deficit"
 TITLE_FONT_PX = 9.0
 NOTE_FONT_PX = 6.5  # caption and source note (the source note is 130 characters or more)
 FIT = 0.92  # a label is drawn in a zone when its text fills at most this share of it
+CANVAS_BUDGET_PX = 4_000_000  # [P] pixels of the canvas that measures the labels (16 MB of RGBA)
 SVG_SIZE = re.compile(r'(<svg [^>]*?width="[\d.]+)pt(" height="[\d.]+)pt"')
 ZONE_COLOURS = (
     "#cfe0f3",
@@ -244,6 +245,17 @@ def build_diagram(data: ReportData, scenario_id: str, out_dir: Path) -> Path:
     return out
 
 
+def _canvas_dpi(w_px: float, h_px: float) -> float | None:
+    """`None` (matplotlib's own dpi) unless the canvas that only measures the labels would need
+    more than `CANVAS_BUDGET_PX` pixels: the plan of a 50 km2 building takes 20,000 x 20,000 px,
+    1.5 GB of RGBA, for a drawing that is a vector SVG (inputs that blow the plan up: a
+    utilisation of 1e-5, a growth rate of 9, a shift of a few seconds). Then the dpi that fits the
+    budget: the labels are measured coarser, in a plan nobody reads at that scale."""
+    dpi = float(rcParams["figure.dpi"])
+    pixels = (w_px / PT_PER_INCH * dpi) * (h_px / PT_PER_INCH * dpi)
+    return None if pixels <= CANVAS_BUDGET_PX else dpi * math.sqrt(CANVAS_BUDGET_PX / pixels)
+
+
 def draw_diagram(layout: Layout, data: ReportData) -> Figure:
     lang = data.lang
     below = max((r.y + r.h for r in layout.rects), default=layout.height_m)
@@ -254,7 +266,7 @@ def draw_diagram(layout: Layout, data: ReportData) -> Figure:
     w_px = max(MIN_WIDTH_PX, left + layout.width_m * PX_PER_M + right)
     h_px = top + height_m * PX_PER_M + bottom
     with rc_context({"font.family": fonts()}):
-        fig = Figure(figsize=(w_px / PT_PER_INCH, h_px / PT_PER_INCH))
+        fig = Figure(figsize=(w_px / PT_PER_INCH, h_px / PT_PER_INCH), dpi=_canvas_dpi(w_px, h_px))
         canvas = FigureCanvasAgg(fig)
         ax = fig.add_axes(
             (
