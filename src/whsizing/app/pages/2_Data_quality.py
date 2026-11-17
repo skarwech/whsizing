@@ -21,7 +21,7 @@ if not report_path.is_file():
 try:
     report = read_model(report_path, DQReport, "run `whsizing ingest`")
 except WhsizingError as e:  # a run of an older engine, or edited by hand
-    st.error(f"{type(e).__name__}: {e}")
+    state.error(f"{type(e).__name__}: {e}")
     st.stop()
 
 # -- score badge

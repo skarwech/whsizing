@@ -28,6 +28,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import threading
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from importlib import metadata
@@ -274,8 +275,17 @@ def copy_inputs(project: Project, run_dir: Path) -> str:
 
 
 def write_manifest(manifest: RunManifest, run_dir: Path) -> Path:
+    """manifest.json, replaced atomically: a command rewrites it (the timings) while another
+    process or thread may read it, as the Streamlit demo does with its shared example, and a
+    reader must see the old file or the new one, never a half-written one."""
     path = run_dir / "manifest.json"
-    path.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    tmp = path.with_name(f"manifest.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        tmp.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+    except BaseException:  # nothing half-written is left behind, and the error goes on
+        tmp.unlink(missing_ok=True)
+        raise
     return path
 
 

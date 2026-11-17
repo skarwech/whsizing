@@ -9,11 +9,15 @@ months). Its CSV files are generated on the first visit, then ingested and sized
 commands the terminal runs (`whsizing.app.calls`), so the demo exercises the real pipeline:
 
 - `shared_run`: the finished example, built once per server process and opened by every visitor
-  (read-only, a run is immutable once sized);
+  (sized once and never sized again; what a visitor's export on page 6 adds to it is the report
+  files and the timings of the manifest, see `shared_run`);
 - `load_demo`: a run of the visitor's own with the four datasets ingested and the demo basis and
   scenarios saved as drafts, to walk through pages 2 to 6 step by step.
 
-A demo run carries `ui/demo.json`; only those are listed, opened from `?run=` or pruned.
+A demo run carries `ui/demo.json`; only those are opened from `?run=` in the public demo, and
+only there are the old ones pruned (the full app keeps every run it is given). The salt: the
+public demo gets a random one per server process; the full app never sets one for the user, whose
+own salt (page 1, `$WHSIZING_SALT`) must stay what decides it.
 """
 
 from __future__ import annotations
@@ -33,6 +37,7 @@ from whsizing.app.calls import call
 from whsizing.cli.data import ingest_cmd
 from whsizing.cli.sizing import compare_cmd, size_cmd
 from whsizing.errors import ConfigError
+from whsizing.schemas.params import DatasetKind
 from whsizing.synth import synthesize
 
 DEMO_ENV = "WHSIZING_DEMO_ONLY"
@@ -41,12 +46,9 @@ WORK_ENV = "WHSIZING_DEMO_DIR"  # where the demo keeps its data and runs (defaul
 PROFILE = Path("data/synth/profiles/demo.yaml")
 BASIS = Path("basis/demo_basis.yaml")
 SCENARIOS = Path("scenarios/demo_scenarios.yaml")
-DATASETS = (
-    "sku_master",
-    "order_lines",
-    "inventory",
-    "receipts",
-)  # the others are checked against it
+# the order of the ingest (the SKU master first: the others are checked against it) and the order
+# of the dataset selector of page 1
+DATASETS: tuple[DatasetKind, ...] = ("sku_master", "order_lines", "inventory", "receipts")
 MARKER = Path("ui") / "demo.json"
 SEED = 42
 RUN_MAX_AGE_S = 3 * 3600  # [P] a visitor's demo run is deleted three hours after it was made
@@ -78,11 +80,26 @@ def resource_root() -> Path:
 
 
 def ensure_salt() -> None:
-    """A random salt for this server process when none is set. The data is synthetic, there is
-    nothing to protect, but the ingest refuses to run without a salt (C2); a salt the deployer
-    set (secrets, environment) is kept."""
-    if not os.environ.get(SALT_ENV):
-        os.environ[SALT_ENV] = secrets.token_hex(16)
+    """A random salt for this server process when none is set (public demo only, see `load_demo`).
+    The data is synthetic, there is nothing to protect, but the ingest refuses to run without a
+    salt (C2); a salt the deployer set (secrets, environment) is kept. Under the lock: two first
+    visitors must not each plant a different salt, the datasets of one run would not join."""
+    with _LOCK:
+        if not os.environ.get(SALT_ENV):
+            os.environ[SALT_ENV] = secrets.token_hex(16)
+
+
+def _throwaway_salt() -> Path | None:
+    """The salt file of one `load_demo` in the full app when the user has not exported a salt: the
+    environment stays unset, so page 1 still asks for the user's own salt (a process-wide random
+    one would be used for their real files, and be lost). None: `$WHSIZING_SALT` is used, which
+    the public demo has (`ensure_salt`) and a user who exported one keeps."""
+    if demo_only() or os.environ.get(SALT_ENV):
+        return None
+    fd, name = tempfile.mkstemp(prefix="whsizing-demo-salt-")  # 0600, outside any repository
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(secrets.token_hex(16))
+    return Path(name)
 
 
 def ensure_data() -> Path:
@@ -91,8 +108,9 @@ def ensure_data() -> Path:
     key = hashlib.sha256(profile.read_bytes()).hexdigest()[:8]
     out = work_dir() / f"data-{key}-{SEED}"
     done = out / ".complete"
-    with _LOCK:
-        if not done.is_file():
+    with _LOCK:  # complete = the marker and the four files (a marker that outlived its files is
+        # no marker: the next visit regenerates instead of failing until the process restarts)
+        if not (done.is_file() and all((out / "csv_en" / f"{d}.csv").is_file() for d in DATASETS)):
             shutil.rmtree(out, ignore_errors=True)
             synthesize(profile, out, seed=SEED)
             done.write_text("ok\n", encoding="utf-8")
@@ -113,6 +131,11 @@ def is_demo_run(run: Path) -> bool:
     return _meta(run).get("demo") is True
 
 
+def is_shared(run: Path) -> bool:
+    """The finished example (of this server process or of an earlier one)."""
+    return _meta(run).get("shared") is True
+
+
 def mark(run: Path, *, shared: bool = False) -> None:
     path = run / MARKER
     path.parent.mkdir(exist_ok=True)
@@ -120,14 +143,19 @@ def mark(run: Path, *, shared: bool = False) -> None:
     path.write_text(json.dumps(meta), encoding="utf-8")
 
 
+def _is_current_shared(run: Path) -> bool:
+    return _shared is not None and run.resolve() == _shared.resolve()
+
+
 def prune(runs: Path, now: float | None = None) -> list[Path]:
     """Delete the demo runs older than `RUN_MAX_AGE_S` and, above `MAX_RUNS`, the oldest ones.
-    Never a run without the demo marker, never the shared example."""
+    Never a run without the demo marker, never this process's shared example (the one an earlier
+    server process left in the folder ages out like any other)."""
     now = time.time() if now is None else now
     found = sorted(
         (float(_meta(p).get("created", 0.0)), p)
         for p in (runs.iterdir() if runs.is_dir() else [])
-        if p.is_dir() and is_demo_run(p) and not _meta(p).get("shared")
+        if p.is_dir() and is_demo_run(p) and not _is_current_shared(p)
     )
     old = [p for created, p in found if now - created > RUN_MAX_AGE_S]
     rest = [p for _, p in found if p not in old]
@@ -141,23 +169,35 @@ def prune(runs: Path, now: float | None = None) -> list[Path]:
 def load_demo(runs: Path) -> Path:
     """A new run folder with the four demo datasets ingested (the CLI `ingest`, one dataset after
     the other, `sku_master` first) and the demo basis and scenarios saved as the run's drafts, which
-    pages 4 and 5 start from. `CliError` when a command fails."""
-    ensure_salt()
+    pages 4 and 5 start from. `CliError` when a command fails (the run is marked from its first
+    dataset on, so that a failed build is pruned like any other in the public demo)."""
+    if demo_only():  # the full app keeps the user's runs and the user's salt: no pruning, no
+        ensure_salt()  # process-wide salt (the public demo has both: visitors share the server)
+        prune(runs)
     data = ensure_data()
     root = resource_root()
-    prune(runs)
+    salt_file = _throwaway_salt()
     run: Path | None = None
-    for dataset in DATASETS:
-        done = call(
-            ingest_cmd,
-            files=[data / f"{dataset}.csv"],
-            dataset=dataset,
-            non_interactive=True,
-            out_dir=runs,
-            run=run,
-        )
-        run = Path(done.last_line)
+    try:
+        for dataset in DATASETS:
+            done = call(
+                ingest_cmd,
+                files=[data / f"{dataset}.csv"],
+                dataset=dataset,
+                non_interactive=True,
+                out_dir=runs,
+                run=run,
+                salt_file=salt_file,
+            )
+            run = Path(done.last_line)
+            mark(run)
+    finally:
+        if salt_file is not None:
+            salt_file.unlink(missing_ok=True)
     assert run is not None
+    # `?run=<name>` opens any demo run, so the name is the visitor's key to theirs: the stock name
+    # is a second and six hex digits that every demo run shares (the site and the seed are public)
+    run = run.rename(run.with_name(f"{run.name}-{secrets.token_hex(8)}"))
     drafts = run / "ui"
     drafts.mkdir(exist_ok=True)
     for name, source in (("basis", BASIS), ("scenarios", SCENARIOS)):
@@ -188,7 +228,9 @@ def forget_shared() -> None:
 
 def shared_run(runs: Path, catalog: Path) -> Path:
     """The finished example: ingested, sized and compared once per server process (the first visit
-    waits about 30 s), then every visitor opens the same immutable run."""
+    waits about 30 s), then every visitor opens the same run. It is sized once and never again, but
+    it is not read-only: a visitor's Excel or PDF export on page 6 adds files to `report/` and the
+    timings to `manifest.json` (`report_cmd`), which is why the manifest is written atomically."""
     global _shared
     with _LOCK:
         run = _shared

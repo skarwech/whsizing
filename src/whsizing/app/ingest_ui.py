@@ -44,6 +44,7 @@ DEFAULT_UPLOAD_NAME = "upload"  # for an uploaded name that is no file name ('',
 MAX_NAME_BYTES = 200  # a file system refuses a name over 255 bytes (ENAMETOOLONG); some margin
 MAX_SUFFIX_BYTES = 16  # the extension is kept (the readers go by it) when it is a real one
 MAP_HEADERS = ("map_target", "map_column", "map_score", "map_status", "map_accept")
+DEFAULT_UPLOAD_CAP_MB = 200  # Streamlit's own `server.maxUploadSize`
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,15 @@ class IngestOutcome:
 
 def uploads_dir() -> Path:
     return runs_root() / ".uploads"
+
+
+def upload_cap_mb() -> int:
+    """The largest upload this server takes (`server.maxUploadSize`, MB). `.streamlit/config.toml`
+    sets 1 (the hosted demo takes no upload); `just app` passes 1024."""
+    try:
+        return int(st.get_option("server.maxUploadSize"))
+    except (TypeError, ValueError):
+        return DEFAULT_UPLOAD_CAP_MB
 
 
 def memory_limit() -> int:

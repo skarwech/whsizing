@@ -124,6 +124,18 @@ def test_T10_4_an_upload_above_a_quarter_of_the_memory_is_sent_to_the_cli() -> N
     assert command.startswith("whsizing ingest 'big file.csv' --dataset sku_master")
 
 
+def test_T10_4_the_upload_cap_is_the_option_of_the_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    options: dict[str, object] = {"server.maxUploadSize": 1}
+    monkeypatch.setattr(ingest_ui.st, "get_option", lambda key: options.get(key))
+    assert ingest_ui.upload_cap_mb() == 1  # `.streamlit/config.toml`, a plain `streamlit run`
+    options["server.maxUploadSize"] = 1024  # `just app`
+    assert ingest_ui.upload_cap_mb() == 1024
+    options["server.maxUploadSize"] = "not a number"
+    assert ingest_ui.upload_cap_mb() == ingest_ui.DEFAULT_UPLOAD_CAP_MB  # then Streamlit's own
+    options.clear()
+    assert ingest_ui.upload_cap_mb() == ingest_ui.DEFAULT_UPLOAD_CAP_MB
+
+
 def test_T10_4_the_salt_lives_in_this_process_only(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("WHSIZING_SALT", raising=False)
     assert not ingest_ui.salt_ready()

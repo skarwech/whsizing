@@ -105,9 +105,13 @@ safest data minimisation is a request that does not ask for the sensitive column
   "External URL" (`net_util.get_external_ip`), and started non-headless it opens a UDP `connect()` to
   8.8.8.8 to learn the machine's internal IP (no packet is sent). Setting `server.address`, as
   `just app` does (`127.0.0.1`), avoids the lookups. The same setting keeps the app
-  **loopback-only**: it has no authentication, so the full app **refuses to start** on any other
-  address (`WHSIZING_ALLOW_REMOTE=1` says an authenticating proxy is in front: a separate, deliberate
-  step, C6). The public demo (`streamlit_app.py`, `docs/DEPLOY_STREAMLIT.md`) is the one exception:
+  **loopback-only**: it has no authentication, so on any other address the full app **answers every
+  page with an error** (the server still listens: start it with `--server.address 127.0.0.1`, as
+  `just app` does; `WHSIZING_ALLOW_REMOTE=1` says an authenticating proxy is in front: a separate, deliberate
+  step, C6). `just app` also passes `--server.maxUploadSize 1024`: the repository's
+  `.streamlit/config.toml` caps an upload at 1 MB, for the hosted demo, so a full app started
+  some other way (behind a proxy, say) needs that flag too for files of real size (page 1 says so
+  when the cap is small; a typed path or `whsizing ingest` has no cap). The public demo (`streamlit_app.py`, `docs/DEPLOY_STREAMLIT.md`) is the one exception:
   synthetic data only, no upload, no typed server path; never put client data in a hosted copy. C2 step 5 asks for written consent before any external call on client data: no call
   carries client data in this version.
 - **Hashing at ingestion.** `HMAC-SHA256(salt, id)[:16]` on order id, SKU, receipt id and customer;

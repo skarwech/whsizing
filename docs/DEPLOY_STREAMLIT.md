@@ -27,12 +27,38 @@ the open app. In demo mode:
 | Typed path of a file on the server | yes | **no** (it would read any file of the server) |
 | Data | the client's, anonymised at ingestion | synthetic, generated on the first visit |
 | Salt | typed or `$WHSIZING_SALT` | random per server process (a salt you set is kept) |
-| Runs a visitor sees | all of the runs folder | only runs made by the demo; never another visitor's |
-| Address | loopback only (the app refuses another one) | any (the platform has to reach it) |
-| Commands | one at a time per server process (`calls._LOCK`) | same |
+| Runs a visitor can open | all of the runs folder | only the demo's: the shared example and the run of their session. A run opens by its name (`?run=`); a visitor's run name ends in 16 random hex digits, so the link is the key to it (the data is synthetic) |
+| Old runs | kept | a visitor's demo run is deleted after 3 hours, and the oldest above 30 (the shared example stays) |
+| Address | loopback only (on another one every page shows an error) | any (the platform has to reach it) |
+| Commands | one at a time per server process (`calls._LOCK`) | same; one that waits more than 2 minutes behind another gives up with a "server busy" message |
+| Inputs | any | bounded, see below |
+| Unexpected errors | the traceback of the page | the type of the error only (`client.showErrorDetails = type`) |
+| Upload route | up to 1 GB (`just app` raises `server.maxUploadSize`) | 1 MB (`.streamlit/config.toml`): Streamlit serves the route even without an uploader |
 
 Why uploads are off: the specification (C2) keeps client data on the team's machines, and a hosted
 demo is somebody else's server. Do not put real client data in a deployed copy.
+
+### What the demo bounds, and why
+
+One process serves every visitor, and a command cannot be interrupted once it runs. A security
+review of the demo froze it with plain widgets (measured on the demo study), so the demo refuses
+these inputs with a message that names the limit (`whsizing.app.demo_limits`; the library and the
+full app have no such limits):
+
+| Input | Limit | What it cost without the limit |
+|---|---|---|
+| `finance.horizon_years`, `projection.horizon_years` | at most 20 years | 320 years: 53 s and 2.9 GB in `compare` |
+| number of scenarios | at most 6 | 30 scenarios: 104 s in `compare`, 30 s for the PDF of 20 |
+| an override of a constant (`engine.max_equipment_count` and the other structural scalars) | not allowed | lifting the guard made the engine loop on 2.8 million packing stations |
+| an override of a parameter | inside the catalog's own range (`min` to `max`) | a packing rate 1000 times too low: the same queue |
+
+Also: at most two heavy page computations at a time (`loaders.HEAVY_AT_ONCE`: eight at once took
+the process from 0.9 to 2.8 GB), and the messages a visitor sees show `<runs>` where the server's
+folders would be. A visitor can still make 30 demo runs and so push the oldest ones of other
+visitors out of the 30 kept (a free demo; run it behind a login if that matters), and the commands
+run in the server's process: a hostile visitor with a lot of patience is not stopped by these
+limits, only the accidental or cheap ones are. Running every command in a child process with a
+time and memory limit is the real fix, and would be a change of `whsizing.app.calls`.
 
 ## Run it locally
 
@@ -50,7 +76,10 @@ just demo-app          # = uv run streamlit run streamlit_app.py --server.addres
    - Optional: a custom subdomain.
 3. **Advanced settings**: Python version **3.12** (the default; `requires-python` is `>=3.12`).
    Secrets are optional: `WHSIZING_LANG = "fr"` makes French the default language (otherwise the
-   browser's language decides), `WHSIZING_SALT = "..."` replaces the random salt.
+   browser's language decides), `WHSIZING_SALT = "..."` replaces the random salt. Write them at the
+   top of the secrets text, outside any `[section]`: only top-level keys become environment
+   variables. `WHSIZING_DEMO_ONLY` is set by `streamlit_app.py` itself and cannot be switched off
+   from outside.
 4. **Deploy.** The first build installs the locked dependencies and the system packages, then the
    app starts; the first visitor to click "Open the finished example" waits for the build of the
    demo study (the platform's instances are smaller than a laptop: expect 30 s or a little more).
@@ -60,9 +89,9 @@ What the platform reads from the repository, and why:
 | File | Role |
 |---|---|
 | `uv.lock` + `pyproject.toml` | the dependencies, pinned. Community Cloud takes the first dependency file it finds in this order: `uv.lock`, `Pipfile`, `environment.yml`, `requirements.txt`, `pyproject.toml`; do not add a second dependency file. The `app` group (Streamlit) is a default group, so a plain `uv sync` installs it. |
-| `packages.txt` | Debian packages for the PDF report (WeasyPrint needs Pango): `libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0` (the list of the WeasyPrint documentation for Debian) and fonts. Without them the app still runs and the PDF button shows an error instead of crashing. |
+| `packages.txt` | Debian packages for the PDF report (WeasyPrint needs Pango): `libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0` (the list of the WeasyPrint documentation for Debian) and fonts; `tzdata`, the time-zone database that ingestion reads (a no-op where the image has it). Without the Pango packages the app still runs and the PDF button shows an error instead of crashing. |
 | `streamlit_app.py` | the entry point. It makes `src/` importable when the platform installs the dependencies without the project itself. |
-| `.streamlit/config.toml` | telemetry off, upload limit. No `server.address`: it would stop the platform from reaching the app. |
+| `.streamlit/config.toml` | telemetry off, a 1 MB upload cap (the hosted demo takes no upload; `just app` passes `--server.maxUploadSize 1024`). No `server.address`: it would stop the platform from reaching the app. |
 | `catalog/`, `basis/demo_basis.yaml`, `scenarios/demo_scenarios.yaml`, `data/synth/profiles/demo.yaml` | what the demo reads. Community Cloud starts the app from the root of the repository, which is where they are looked for. |
 
 Limits of the platform to keep in mind (from its documentation at the time of writing: check it):
@@ -82,8 +111,9 @@ Checked on the build machine (macOS with Docker Desktop), on a clean copy of the
   (about 10 s on this machine), the Results page shows the comparison, tables, block diagrams and
   business case, and the Excel and PDF (17 pages) are built from the page. No error in the browser
   console. Peak memory of the whole flow: 1.0 to 1.3 GB.
-- The same flow inside the Docker image (Debian Linux, built from `uv.lock` and `packages.txt`'s
-  package list), PDF built with WeasyPrint on Linux included; about 1.0 GiB in the container.
+- The same flow inside the Docker image (Debian Linux, built from `uv.lock`; its apt list has the
+  Pango, harfbuzz and font packages of `packages.txt`), PDF built with WeasyPrint on Linux included;
+  about 1.0 GiB in the container.
 - `streamlit_app.py` under Streamlit's `AppTest` (`tests/e2e/test_f10_app_demo.py`,
   `tests/unit/test_f10_app_demo_data.py`): banner, no uploader, language kept across pages, visitors
   separated, the finished example built once and opened by two visitors, the step-by-step path sized

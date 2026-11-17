@@ -12,7 +12,7 @@ from pathlib import Path
 import streamlit as st
 
 import whsizing.report as report_api
-from whsizing.app import drilldown
+from whsizing.app import demo, drilldown, state
 from whsizing.app.calls import CliError, call, printed_paths
 from whsizing.app.strings import tr
 from whsizing.cli._runio import COMPARISON_FILE
@@ -183,12 +183,15 @@ def export_section(run: Path, lg: Lang) -> None:
         if getattr(report_api, builder, None) is None:  # F9b / F9c are built apart
             st.info(tr("results.unavailable", lg, kind=suffix.upper()))
             continue
-        if st.button(tr("results.build", lg, kind=suffix.upper()), key=f"export.{suffix}"):
+        built = any((run / "report").glob(f"*_{lg}.{suffix}"))  # the library names them *_<lang>.*
+        if (not (demo.demo_only() and built)) and st.button(
+            tr("results.build", lg, kind=suffix.upper()), key=f"export.{suffix}"
+        ):
             with st.spinner(tr("results.building", lg)):
                 try:
                     done = call(report_cmd, run=run, lang=lg, formats=suffix)
                 except CliError as e:
-                    st.error(f"exit {e.code}: {e.message}")
+                    state.cli_error(e, lg)
                 else:
                     st.success(", ".join(p.name for p in printed_paths(done, (f".{suffix}",))))
         for path in sorted((run / "report").glob(f"*.{suffix}")):

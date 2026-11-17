@@ -11,7 +11,8 @@ import streamlit as st
 from streamlit.errors import StreamlitAPIException
 
 from whsizing.app import demo, state
-from whsizing.app.calls import CliError
+from whsizing.app.calls import BUSY_CODE, CliError
+from whsizing.app.demo_limits import Problem
 from whsizing.app.strings import tr
 from whsizing.errors import WhsizingError
 from whsizing.report import Lang
@@ -35,11 +36,18 @@ def goto_results(lg: Lang) -> None:
         st.info(tr("demo.next", lg))
 
 
+def limit_messages(problems: list[Problem], lg: Lang) -> list[str]:
+    """The texts of `demo_limits.limit_problems` in the visitor's language."""
+    return [tr(key, lg, **values) for key, values in problems]
+
+
 def _failed(lg: Lang, error: Exception) -> None:
-    if isinstance(error, CliError):
-        st.error(tr("demo.error", lg, code=error.code, message=error.message))
+    if isinstance(error, CliError) and error.code == BUSY_CODE:
+        st.warning(tr("demo.busy", lg))
+    elif isinstance(error, CliError):
+        state.error(tr("demo.error", lg, code=error.code, message=error.message))
     else:
-        st.error(f"{type(error).__name__}: {error}")
+        state.error(f"{type(error).__name__}: {error}")
 
 
 def open_example(lg: Lang) -> None:
@@ -67,14 +75,21 @@ def load_steps(lg: Lang) -> None:
     st.rerun()
 
 
-def section(lg: Lang, *, heading: bool = True) -> None:
-    """The title, the two buttons and the message of the last build."""
-    if heading:
-        st.subheader(tr("demo.title", lg))
-    st.write(tr("demo.intro", lg))
+def show_notice() -> None:
+    """The message of the last build, once (the build asked for a rerun to show the new run)."""
     notice = st.session_state.pop(NOTICE, None)
     if notice:
         st.success(notice)
+
+
+def section(lg: Lang, *, heading: bool = True, notice: bool = True) -> None:
+    """The title, the two buttons and the message of the last build (`notice=False`: the caller
+    shows it, outside a collapsed expander for instance)."""
+    if heading:
+        st.subheader(tr("demo.title", lg))
+    st.write(tr("demo.intro", lg))
+    if notice:
+        show_notice()
     example, steps = st.columns(2)
     if example.button(tr("demo.example", lg), type="primary", key="demo.example"):
         open_example(lg)

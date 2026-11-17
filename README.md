@@ -29,7 +29,9 @@ just demo-app      # synthetic e-commerce site, three scenarios, no upload: http
 
 `streamlit_app.py` is the entry point to deploy on [Streamlit Community Cloud](https://share.streamlit.io)
 (Main file path `streamlit_app.py`); `docs/DEPLOY_STREAMLIT.md` has the steps, what the hosted demo allows
-and what was checked. The full app for real client files stays local: `just app`.
+and what was checked. The full app for real client files stays local: `just app`. The hosted demo
+bounds what a visitor can ask of the engine (a horizon of at most 20 years, at most 6 scenarios,
+parameters inside the catalog's range); the library and the full app have no such limits.
 
 ## Layout
 

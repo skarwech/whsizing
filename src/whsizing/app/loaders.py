@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from pathlib import Path
 
 import plotly.graph_objects as go
@@ -30,9 +31,18 @@ from whsizing.schemas import DemandProfile, DesignBasis, DesignDay
 from whsizing.schemas.run import RunOutput
 
 # A hosted server keeps these results for every visitor's run: bound the memory (an entry is the
-# tables or figures of one run: about 30 MB for the report model with its traces). Locally the
-# bound is never reached.
+# tables or figures of one run: the report model with its traces pickles to about 1.6 MB for the
+# demo study, the others to about 0.1 MB; a bigger study is bigger). Locally the bound is never
+# reached.
 CACHE = {"show_spinner": False, "max_entries": 8, "ttl": 6 * 3600}
+
+# `st.cache_data` computes a miss in the script thread of the visitor who caused it, so distinct
+# values (every slider position of page 4 is one) run side by side: eight at once took the demo
+# from 0.9 to 2.8 GB. Two at a time keep the peak near the one of the commands (about 1.1 GB); the
+# others wait their turn. Never taken twice by one call (a cached function calling another one
+# gets its own result before it takes a turn), which would let two callers wait for each other.
+HEAVY_AT_ONCE = 2
+_HEAVY = threading.BoundedSemaphore(HEAVY_AT_ONCE)
 
 PROFILE_FIGURES = (
     "daily_lines",
@@ -74,7 +84,8 @@ def tables_hash(run: str, digest: str) -> str:
     when the profile was made from them (`digest`: `canonical_digest`, so that it is computed once
     per content: reading and hashing the tables costs seconds on a big run)."""
     del digest
-    return dataset_hash(load_canonical(Path(run) / "canonical"))
+    with _HEAVY:
+        return dataset_hash(load_canonical(Path(run) / "canonical"))
 
 
 @st.cache_data(**CACHE)
@@ -88,13 +99,16 @@ def catalog_of(path: str, digest: str) -> Catalog:
 def output(run: str, digest: str) -> RunOutput:
     """The sized and compared run (`digest`: `state.run_digest`)."""
     del digest
-    return load_run(Path(run))
+    with _HEAVY:
+        return load_run(Path(run))
 
 
 @st.cache_data(**CACHE)
 def report_data(run: str, lang: Lang, digest: str) -> ReportData:
     """Everything the report reads, with its tables and the traces (F9a)."""
-    return load_report_data(output(run, digest), lang)
+    sized = output(run, digest)  # takes its own turn: not while this one holds a turn
+    with _HEAVY:
+        return load_report_data(sized, lang)
 
 
 @st.cache_data(**CACHE)
@@ -106,9 +120,12 @@ def profile_view(
     run_dir = Path(run)
     cfg = profile_cfg_of(run_dir)
     basis = load_basis(basis_file) if basis_file else None
-    tables = build_tables(run_dir / "canonical", basis, cfg)
-    profile = read_model(run_dir / "profile" / "demand_profile.json", DemandProfile, "run profile")
-    return profile, {name: CHARTS[name](profile, tables)[1] for name in PROFILE_FIGURES}
+    with _HEAVY:
+        tables = build_tables(run_dir / "canonical", basis, cfg)
+        profile = read_model(
+            run_dir / "profile" / "demand_profile.json", DemandProfile, "run profile"
+        )
+        return profile, {name: CHARTS[name](profile, tables)[1] for name in PROFILE_FIGURES}
 
 
 @st.cache_data(**CACHE)
@@ -120,9 +137,10 @@ def design_preview(
     run_dir = Path(run)
     basis = check_basis(DesignBasis.model_validate(json.loads(basis_json)))
     cfg = profile_cfg_of(run_dir)
-    tables = build_tables(run_dir / "canonical", basis, cfg)
-    profile = profile_from_tables(tables, cfg)
-    master = run_dir / "canonical" / "sku_master.parquet"
-    sku = sku_frame(tables, read_parquet_file(master) if master.is_file() else None)
-    catalog = load_catalog(catalog_path)
-    return select_design_day(profile, basis, tables.daily, sku=sku, catalog=catalog)
+    with _HEAVY:
+        tables = build_tables(run_dir / "canonical", basis, cfg)
+        profile = profile_from_tables(tables, cfg)
+        master = run_dir / "canonical" / "sku_master.parquet"
+        sku = sku_frame(tables, read_parquet_file(master) if master.is_file() else None)
+        catalog = load_catalog(catalog_path)
+        return select_design_day(profile, basis, tables.daily, sku=sku, catalog=catalog)

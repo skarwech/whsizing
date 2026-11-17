@@ -21,7 +21,7 @@ if not state.reached(run, "profiled") or state.profile_stale(run):  # staged flo
             call(profile_cmd, run=run, cfg=state.profile_cfg_file(run))
             state.mark_profiled(run)
         except CliError as e:
-            st.error(f"exit {e.code}: {e.message}")
+            state.cli_error(e, lg)
             st.stop()
 basis_file = state.saved_path(run, "basis")
 try:
@@ -32,7 +32,7 @@ try:
         loaders.digest_of(*([basis_file] if basis_file else [])),
     )
 except WhsizingError as e:  # a run of an older engine, or edited by hand
-    st.error(f"{type(e).__name__}: {e}")
+    state.error(f"{type(e).__name__}: {e}")
     st.stop()
 
 cols = st.columns(4)

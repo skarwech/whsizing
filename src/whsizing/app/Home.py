@@ -25,8 +25,9 @@ if public:
 else:
     root = state.runs_root()
     runs = state.list_runs(root)
+    demo_ui.show_notice()  # outside the expander: it is collapsed once the new run is listed
     with st.expander(tr("demo.title", lg), expanded=not runs):
-        demo_ui.section(lg, heading=False)
+        demo_ui.section(lg, heading=False, notice=False)
     st.subheader(tr("home.runs", lg))
     if not runs:
         st.info(tr("home.no_runs", lg, root=root))

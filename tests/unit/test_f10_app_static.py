@@ -58,10 +58,18 @@ def test_T10_4_app_sources_open_no_url_and_call_no_remote_api() -> None:
         assert "urlopen" not in text and "requests." not in text
 
 
-def test_T10_4_streamlit_config_turns_telemetry_off_and_allows_1_gb_uploads() -> None:
+def test_T10_4_streamlit_config_turns_telemetry_off_and_only_the_full_app_allows_1_gb_uploads() -> (
+    None
+):
+    """Streamlit serves its upload route whether or not a page has an uploader, and keeps what a
+    client sends in memory: the shared config (read by the hosted demo, which takes no upload)
+    keeps a 1 MB cap, and `just app` (the full app, spec: 1024 MB) raises it."""
     config = tomllib.loads((ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert config["browser"]["gatherUsageStats"] is False
-    assert config["server"]["maxUploadSize"] == 1024
+    assert config["server"]["maxUploadSize"] <= 1
+    justfile = (ROOT / "justfile").read_text(encoding="utf-8")
+    app_recipe = next(ln for ln in justfile.splitlines() if "streamlit run src/whsizing" in ln)
+    assert "--server.maxUploadSize 1024" in app_recipe
 
 
 def test_T10_4_loopback_is_enforced_by_the_commands_and_the_app_not_by_the_shared_config() -> None:
@@ -78,7 +86,12 @@ def test_T10_4_loopback_is_enforced_by_the_commands_and_the_app_not_by_the_share
 def test_T10_4_justfile_has_an_app_recipe_that_starts_the_home_page() -> None:
     lines = (ROOT / "justfile").read_text(encoding="utf-8").splitlines()
     assert "app:" in lines
-    assert "    uv run streamlit run src/whsizing/app/Home.py --server.address 127.0.0.1" in lines
+    assert any(
+        ln.startswith(
+            "    uv run streamlit run src/whsizing/app/Home.py --server.address 127.0.0.1"
+        )
+        for ln in lines
+    )
 
 
 def test_T10_4_app_imports_no_numeric_library_for_its_own_computations() -> None:
@@ -146,8 +159,24 @@ def test_T10_4_packages_txt_lists_the_debian_packages_weasyprint_needs() -> None
     assert all(re.fullmatch(r"[a-z0-9][a-z0-9+.-]+", name) for name in lines), lines
     assert {"libpango-1.0-0", "libpangoft2-1.0-0", "libharfbuzz-subset0"} <= set(lines)
     assert any(name.startswith("fonts-") for name in lines)  # a PDF needs at least one font
+    assert "tzdata" in lines  # ingestion checks the site's time zone with `ZoneInfo`
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert "libharfbuzz-subset0" in dockerfile  # the image and the host use the same list
+    shared = {"libpango-1.0-0", "libpangoft2-1.0-0", "libharfbuzz-subset0", "fonts-liberation"}
+    assert all(name in dockerfile.split() for name in shared)  # the image installs them as well
+
+
+def test_T10_4_the_ci_installs_the_pango_and_font_packages_the_delivered_app_has() -> None:
+    """The report CSS asks for Liberation Sans first: a runner without it would render the PDFs
+    (and test them) with the DejaVu fallback, which is not what the image and the host deliver."""
+    steps = [
+        line
+        for line in (ROOT / ".github" / "workflows" / "ci.yml").read_text("utf-8").splitlines()
+        if "apt-get install" in line
+    ]
+    assert len(steps) == 2  # the test job and the bench job
+    needed = {"libpango-1.0-0", "libpangoft2-1.0-0", "libharfbuzz-subset0", "fonts-liberation"}
+    for step in steps:
+        assert needed <= set(step.split()), step
 
 
 def test_T10_4_streamlit_is_a_default_dependency_group_of_the_lock_the_host_reads() -> None:
@@ -157,8 +186,9 @@ def test_T10_4_streamlit_is_a_default_dependency_group_of_the_lock_the_host_read
     assert "streamlit" in project["dependency-groups"]["app"]
     assert "app" in project["tool"]["uv"]["default-groups"]
     assert "streamlit" in project["project"]["optional-dependencies"]["ui"]
-    lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
-    assert 'name = "streamlit"' in lock
+    lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
+    ours = next(p for p in lock["package"] if p["name"] == project["project"]["name"])
+    assert {"name": "streamlit"} in ours["dev-dependencies"]["app"]  # the group, not the extra
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv not installed")

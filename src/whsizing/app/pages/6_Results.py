@@ -16,7 +16,7 @@ digest = state.run_digest(run)
 try:
     data = loaders.report_data(str(run), lg, digest)
 except WhsizingError as e:
-    st.error(f"{type(e).__name__}: {e}")
+    state.error(f"{type(e).__name__}: {e}")
     st.stop()
 tables = data.tables
 all_worlds = st.toggle(tr("results.all_worlds", lg), False, key="results.worlds")

@@ -55,7 +55,7 @@ docs:
 # Streamlit wrapper (F10b); run from the repository root so .streamlit/config.toml applies.
 # export WHSIZING_SALT=<secret> first, or type the salt on page 1.
 app:
-    uv run streamlit run src/whsizing/app/Home.py --server.address 127.0.0.1
+    uv run streamlit run src/whsizing/app/Home.py --server.address 127.0.0.1 --server.maxUploadSize 1024
 
 # The public demo (streamlit_app.py: synthetic data only, no upload) on this machine: the same app
 # Streamlit Community Cloud serves (docs/DEPLOY_STREAMLIT.md).

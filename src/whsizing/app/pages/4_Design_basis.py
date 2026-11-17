@@ -6,7 +6,7 @@ import json
 
 import streamlit as st
 
-from whsizing.app import basis_form, entry, loaders, state
+from whsizing.app import basis_form, demo_limits, demo_ui, entry, loaders, state
 from whsizing.app.strings import tr
 from whsizing.cli._runio import read_model
 from whsizing.design import load_basis
@@ -62,7 +62,7 @@ if state.reached(run, "sized"):  # runs are immutable (§2.4): show what the run
             read_model(run / "design" / "design_day.json", DesignDay, "run `whsizing size`"), lg
         )
     except WhsizingError as e:  # a run of an older engine, or edited by hand
-        st.error(f"{type(e).__name__}: {e}")
+        state.error(f"{type(e).__name__}: {e}")
     st.stop()
 
 st.caption(tr("basis.intro", lg))
@@ -77,10 +77,11 @@ catalog_key = loaders.digest_of(catalog_path)
 try:
     catalog = loaders.catalog_of(str(catalog_path), catalog_key)
 except WhsizingError as e:
-    st.error(f"{type(e).__name__}: {e}")
+    state.error(f"{type(e).__name__}: {e}")
     st.stop()
 basis, errors = basis_form.validate(nested, catalog)  # the overrides must name catalog parameters
-errors = [*problems, *errors]
+limits = demo_ui.limit_messages(demo_limits.limit_problems(nested, {}, catalog), lg)  # demo only
+errors = [*problems, *errors, *limits]
 
 with right:
     if errors:
@@ -97,12 +98,12 @@ with right:
             )
             show_design_day(day, lg)
         except WhsizingError as e:
-            st.error(f"{type(e).__name__}: {e}")
+            state.error(f"{type(e).__name__}: {e}")
 
-if st.button(tr("basis.save", lg), type="primary", disabled=bool(errors)):
+if st.button(tr("basis.save", lg), type="primary", disabled=bool(errors)) and not errors:
     path = state.write_draft(run, "basis", nested)
     try:
         load_basis(path)  # the loader of the CLI: same checks
-        st.success(tr("basis.saved", lg, path=path))
+        st.success(demo_limits.scrub(tr("basis.saved", lg, path=path)))
     except WhsizingError as e:
-        st.error(str(e))
+        state.error(str(e))

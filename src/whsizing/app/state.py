@@ -12,15 +12,16 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from collections.abc import Mapping, MutableMapping
 from pathlib import Path
 from typing import Any, Literal, cast
 
 import streamlit as st
 import yaml
-from streamlit.errors import StreamlitAPIException
 
-from whsizing.app import demo
+from whsizing.app import demo, demo_limits
+from whsizing.app.calls import BUSY_CODE, CliError
 from whsizing.app.strings import tr
 from whsizing.errors import WhsizingError
 from whsizing.report import LANGS, Lang, t
@@ -45,13 +46,11 @@ def catalog_dir() -> Path:
 
 
 def browser_lang() -> Lang:
-    """French for a French browser, English otherwise (the public demo assumes no language).
-    `st.context.locale` is None outside a browser session (tests, bare mode)."""
-    try:
-        locale = st.context.locale or ""
-    except (AttributeError, RuntimeError, StreamlitAPIException):
-        locale = ""
-    return "fr" if locale.lower().startswith("fr") else "en"
+    """French for a French browser (its language tag starts with `fr`: fr, fr-FR, fr-CA), English
+    otherwise (the public demo assumes no language). `st.context.locale` is None outside a
+    browser session (tests, bare mode); a Streamlit without it (before 1.45) gives English."""
+    locale = getattr(st.context, "locale", None) or ""
+    return "fr" if re.split(r"[-_]", locale.lower())[0] == "fr" else "en"
 
 
 def default_lang() -> Lang:
@@ -311,6 +310,20 @@ def setup(title_key: str) -> tuple[Lang, Path | None]:
         st.sidebar.caption(f"{tr('run', lg)}: {run.name} ({stage(run)})")
     st.title(tr(title_key, lg))
     return lg, run
+
+
+def error(text: str) -> None:
+    """`st.error` for a message that comes from an exception or a command: in the public demo
+    without the folders of the server."""
+    st.error(demo_limits.scrub(text))
+
+
+def cli_error(failed: CliError, lg: Lang) -> None:
+    """The message of a command that exited non-zero (a busy server in the visitor's language)."""
+    if failed.code == BUSY_CODE:
+        st.warning(tr("demo.busy", lg))
+    else:
+        error(f"exit {failed.code}: {failed.message}")
 
 
 def banner(lg: Lang) -> None:

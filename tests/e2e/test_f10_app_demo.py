@@ -10,30 +10,45 @@ from __future__ import annotations
 
 import ast
 import json
+import os
+import re
 import sys
 import time
 import types
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from whsizing.app import demo, demo_ui, state
+from whsizing.app import demo, demo_limits, demo_ui, state
 from whsizing.app.strings import tr
 
 ROOT = Path(__file__).resolve().parents[2]
 ENTRY = ROOT / "streamlit_app.py"
 APP = ROOT / "src" / "whsizing" / "app"
 TIMEOUT = 300
-HOME, UPLOAD, SCENARIOS, RESULTS = (
+HOME, UPLOAD, BASIS_PAGE, SCENARIOS, RESULTS = (
     "src/whsizing/app/Home.py",
     "src/whsizing/app/pages/1_Upload.py",
+    "src/whsizing/app/pages/4_Design_basis.py",
     "src/whsizing/app/pages/5_Scenarios.py",
     "src/whsizing/app/pages/6_Results.py",
 )
+RUN_NAME = (
+    r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}_[0-9a-f]{6}-[0-9a-f]{16}"  # stock name + 8 random bytes
+)
+
+
+@pytest.fixture(autouse=True)
+def _restore_error_details() -> Iterator[None]:
+    """The entry point sets `client.showErrorDetails` for the whole process: not for other tests."""
+    original = st.get_option("client.showErrorDetails")
+    yield
+    st.set_option("client.showErrorDetails", original)
 
 
 @pytest.fixture(scope="module")
@@ -45,7 +60,8 @@ def demo_env(tmp_path_factory: pytest.TempPathFactory) -> Iterator[SimpleNamespa
         mp.setenv(demo.WORK_ENV, str(work))
         mp.setenv("WHSIZING_RUNS", str(work / "runs"))
         mp.setenv("WHSIZING_CATALOG", str(ROOT / "catalog"))
-        mp.delenv(demo.SALT_ENV, raising=False)
+        mp.setenv(demo.SALT_ENV, "placeholder")  # set, then removed: the teardown also removes
+        mp.delenv(demo.SALT_ENV)  # the salt the demo makes
         mp.delenv("WHSIZING_LANG", raising=False)
         demo.forget_shared()
         yield SimpleNamespace(work=work, runs=work / "runs")
@@ -81,9 +97,9 @@ def test_T10_4_demo_entry_point_sets_the_demo_defaults_before_it_imports_streaml
     assigned: dict[str, int] = {}
     streamlit_import = None
     for node in tree.body:
-        text = ast.unparse(node)
+        text = ast.unparse(node)  # ast.unparse writes single quotes
         for name in ("WHSIZING_DEMO_ONLY", "WHSIZING_RUNS", "WHSIZING_CATALOG"):
-            if f"setdefault('{name}'" in text:  # ast.unparse writes single quotes
+            if f"setdefault('{name}'" in text or text.startswith(f"os.environ['{name}'] = "):
                 assigned[name] = node.lineno
         if isinstance(node, ast.Import) and any(a.name == "streamlit" for a in node.names):
             streamlit_import = node.lineno
@@ -91,6 +107,40 @@ def test_T10_4_demo_entry_point_sets_the_demo_defaults_before_it_imports_streaml
     assert set(assigned) == {"WHSIZING_DEMO_ONLY", "WHSIZING_RUNS", "WHSIZING_CATALOG"}
     assert all(line < streamlit_import for line in assigned.values())
     assert "sys.path.insert" in ENTRY.read_text(encoding="utf-8")
+
+
+def test_T10_4_a_visitor_sees_the_type_of_an_unexpected_error_not_its_frames(
+    demo_env: SimpleNamespace,
+) -> None:
+    """The traceback of a page carries the server's source paths and lines."""
+    assert st.get_option("client.showErrorDetails") != "type"  # the process default
+    assert not entry().run().exception
+    assert st.get_option("client.showErrorDetails") == "type"
+
+
+@pytest.mark.parametrize("outside", [None, "", "0", "false"])
+def test_T10_4_the_entry_point_is_demo_only_whatever_the_environment_says(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, outside: str | None
+) -> None:
+    """The hosted app can never be the open one: the flag is assigned by `streamlit_app.py`, not
+    defaulted, so a secret or a variable of the deployer cannot switch it off (the full app takes
+    files and any server path)."""
+    monkeypatch.setenv(demo.DEMO_ENV, "placeholder")  # recorded, so that the teardown restores it
+    if outside is None:
+        monkeypatch.delenv(demo.DEMO_ENV)
+    else:
+        monkeypatch.setenv(demo.DEMO_ENV, outside)
+    monkeypatch.setenv(demo.WORK_ENV, str(tmp_path / "work"))
+    monkeypatch.setenv("WHSIZING_RUNS", str(tmp_path / "runs"))
+    monkeypatch.setenv(demo.SALT_ENV, "placeholder")
+    monkeypatch.delenv(demo.SALT_ENV)
+    monkeypatch.setenv("WHSIZING_CATALOG", "placeholder")  # the entry point defaults it: recorded
+    monkeypatch.delenv("WHSIZING_CATALOG")  # here too, so that the teardown removes the default
+    at = entry().run()
+    assert not at.exception
+    assert os.environ[demo.DEMO_ENV] == "1"
+    assert "Public demo" in at.sidebar.info[0].value
+    assert uploaders(at) == []
 
 
 def test_T10_4_demo_entry_point_lists_existing_pages_and_the_results_page_demo_ui_opens() -> None:
@@ -169,13 +219,47 @@ def test_T10_4_a_browser_in_french_gets_the_french_demo(
     assert state.browser_lang() == "en"  # no browser session in a test: English
 
 
+@pytest.mark.parametrize(
+    ("locale", "expected"),
+    [
+        ("fr", "fr"),
+        ("fr-FR", "fr"),
+        ("FR-ca", "fr"),
+        ("fr_BE", "fr"),
+        ("en-US", "en"),
+        ("de-FR", "en"),  # the language is the first subtag, not any subtag
+        ("frr", "en"),  # Northern Frisian is no French
+        ("", "en"),
+        (None, "en"),  # outside a browser session
+    ],
+)
+def test_T10_4_the_browser_language_is_its_primary_language_tag(
+    monkeypatch: pytest.MonkeyPatch, locale: str | None, expected: str
+) -> None:
+    monkeypatch.setattr(state.st, "context", SimpleNamespace(locale=locale))
+    assert state.browser_lang() == expected
+
+
+def test_T10_4_a_streamlit_without_a_browser_locale_gives_english(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(state.st, "context", SimpleNamespace())  # before Streamlit 1.45
+    assert state.browser_lang() == "en"
+
+
 def test_T10_4_a_set_language_wins_over_the_browser(
     demo_env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("WHSIZING_LANG", "fr")
-    assert state.default_lang() == "fr"
+    monkeypatch.setattr(state, "browser_lang", lambda: "fr")
+    monkeypatch.delenv("WHSIZING_LANG", raising=False)
+    assert state.default_lang() == "fr"  # no setting: the browser's
     monkeypatch.setenv("WHSIZING_LANG", "en")
-    assert state.default_lang() == "en"
+    assert state.default_lang() == "en"  # set: wins over a French browser
+    monkeypatch.setattr(state, "browser_lang", lambda: "en")
+    monkeypatch.setenv("WHSIZING_LANG", "fr")
+    assert state.default_lang() == "fr"  # and over an English one
+    monkeypatch.setenv("WHSIZING_LANG", "de")
+    assert state.default_lang() == "en"  # a value that names no language is ignored
 
 
 # ------------------------------------------------------------------- visitors are separated
@@ -253,7 +337,23 @@ def test_T10_4_the_full_app_refuses_an_address_the_network_can_reach(
     assert not at.exception
     assert len(at.error) == 1
     assert "WHSIZING_ALLOW_REMOTE" in at.error[0].value  # says how to proceed
+    assert "--server.maxUploadSize 1024" in at.error[0].value  # as `just app` starts it
     assert not at.title and not at.button  # nothing of the app was served
+
+
+def test_T10_4_a_refused_address_does_not_tell_which_runs_exist(
+    served: Serve, tmp_path: Path
+) -> None:
+    """The page is the same error whatever `?run=` names: neither keeping nor dropping the
+    parameter may tell a caller (who has no authentication to get through) which runs exist."""
+    served("0.0.0.0")
+    run = fake_run(tmp_path / "runs", "2000-01-01T00-00-00_a", demo_marker=False)
+    for ref in (run.name, "2000-01-01T00-00-00_missing"):
+        at = AppTest.from_file(str(APP / "Home.py"), default_timeout=TIMEOUT)
+        at.query_params["run"] = ref
+        at.run()
+        assert len(at.error) == 1 and not at.title
+        assert at.query_params["run"] == ref  # untouched for both
 
 
 @pytest.mark.parametrize("address", ["127.0.0.1", "localhost", "::1"])
@@ -282,6 +382,25 @@ def test_T10_4_the_demo_is_served_on_any_address(
     monkeypatch.setenv(demo.DEMO_ENV, "1")
     at = AppTest.from_file(str(APP / "Home.py"), default_timeout=TIMEOUT).run()
     assert not at.error and at.title
+
+
+def test_T10_4_the_full_app_shows_the_message_of_a_build_outside_its_collapsed_expander(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Once a build has made a run the page lists it and the demo expander is collapsed: the
+    message of the build (the new run's name) must not sit inside it, hidden."""
+    monkeypatch.delenv(demo.DEMO_ENV, raising=False)
+    monkeypatch.setenv("WHSIZING_RUNS", str(tmp_path / "runs"))
+    fake_run(tmp_path / "runs", "2000-01-01T00-00-00_a", demo_marker=True)
+    at = AppTest.from_file(str(APP / "Home.py"), default_timeout=TIMEOUT)
+    at.session_state[demo_ui.NOTICE] = "Demo data loaded into run X"
+    at.run()
+    assert not at.exception
+    assert at.expander[0].proto.expanded is False  # the situation: the expander is collapsed
+    assert [e.value for e in at.success] == ["Demo data loaded into run X"]
+    assert "success" in [child.type for child in at.main.children.values()]  # a child of the page
+    assert all(child.type != "success" for child in at.expander[0].children.values())
+    assert demo_ui.NOTICE not in at.session_state  # shown once
 
 
 # ------------------------------------------------------------------------ the two demo flows
@@ -340,6 +459,89 @@ def test_T10_4_step_by_step_gives_the_visitor_a_run_of_their_own_and_the_pages_s
     assert [h.value for h in at.header][:1] == ["Comparison"]
 
 
+def saves(at: AppTest) -> object:
+    return next(b for b in at.button if b.label == tr("basis.save", "en"))
+
+
+@pytest.mark.slow
+def test_T10_4_the_demo_names_the_limit_instead_of_freezing_on_a_huge_input(
+    demo_env: SimpleNamespace,
+) -> None:
+    """The security review froze the demo with plain widgets: a 1000-year horizon, a lifted guard
+    on the equipment count (an override typed in the YAML box of page 4), 30 scenarios (the Add
+    button of page 5). Each is a message naming the limit now, and nothing runs."""
+    at = entry().run()
+    at.button(key="demo.load").click().run()
+    assert not at.exception and not at.error
+    run = Path(at.session_state["run_dir"])
+    assert re.fullmatch(RUN_NAME, run.name), run.name  # the name is the key to the run: unguessable
+    assert at.query_params["run"] == run.name
+
+    key = f"basis.{run.name}"
+    at.switch_page(BASIS_PAGE).run()
+    assert not at.exception and not at.error  # the demo's own basis is inside every limit
+    assert not saves(at).disabled  # type: ignore[attr-defined]
+    at.number_input(key=f"{key}.finance.horizon_years").set_value(1000).run()
+    assert [e.value for e in at.error] == [tr("demo.limit.horizon", "en", **HORIZON)]
+    assert saves(at).disabled  # type: ignore[attr-defined]
+
+    at.switch_page(SCENARIOS).run()  # the same basis, seen from the page that sizes
+    assert not at.exception
+    assert tr("demo.limit.horizon", "en", **HORIZON) in [e.value for e in at.error]
+    assert size_button(at).disabled
+    at.switch_page(BASIS_PAGE).run()
+
+    at.number_input(key=f"{key}.finance.horizon_years").set_value(5).run()
+    assert not at.error
+    for text, wanted in (
+        ("engine.max_equipment_count: 1000000000000", "cannot be overridden"),
+        ("labor.packing_S: 0.000055", "must stay within the catalog range"),
+        ('labor.packing_S: "0.000055"', "must stay within the catalog range"),  # numeric text:
+        ("labor.packing_S: 1e-5", "must stay within the catalog range"),  # PyYAML reads it as text
+    ):
+        at.text_area(key=f"{key}.overrides").set_value(text).run()
+        assert not at.exception
+        assert len(at.error) == 1 and wanted in at.error[0].value, [e.value for e in at.error]
+        assert saves(at).disabled  # type: ignore[attr-defined]
+    for text, wanted in ((f"x: {'9' * 5000}", "ValueError"), ("[" * 3000, "RecursionError")):
+        at.text_area(key=f"{key}.overrides").set_value(text).run()
+        assert not at.exception  # not a traceback with the frames of the server's source files
+        assert any(wanted in e.value for e in at.error), [e.value for e in at.error]
+    at.text_area(key=f"{key}.overrides").set_value(
+        "manual_p2p.pick_rate_shelving_lines_h: 62"
+    ).run()
+    assert not at.error
+
+    at.switch_page(SCENARIOS).run()
+    assert not at.error and not size_button(at).disabled
+    for _ in range(demo_limits.MAX_SCENARIOS - 3):  # the demo has three: up to the limit
+        add_button(at).click().run()
+    assert len(at.session_state[state.SCENARIOS]["scenarios"]) == demo_limits.MAX_SCENARIOS
+    assert add_button(at).disabled  # no more cards
+    assert not at.error and not size_button(at).disabled  # and the limit itself is allowed
+
+    cards = at.session_state[state.SCENARIOS]
+    one_more = {**cards, "scenarios": [*cards["scenarios"], {"id": "S9", "family": "manual_p2p"}]}
+    at.session_state[state.SCENARIOS] = one_more  # what a client that is not the page could send
+    at.run()
+    assert tr("demo.limit.scenarios", "en", max=demo_limits.MAX_SCENARIOS) in [
+        e.value for e in at.error
+    ]
+    assert size_button(at).disabled
+    assert state.stage(run) == "ingested"  # nothing was sized
+
+
+HORIZON = {"name": "finance.horizon_years", "max": demo_limits.MAX_HORIZON_YEARS}
+
+
+def size_button(at: AppTest) -> Any:
+    return next(b for b in at.button if b.label == tr("scn.size", "en"))
+
+
+def add_button(at: AppTest) -> Any:
+    return next(b for b in at.button if b.label == tr("scn.add", "en"))
+
+
 @pytest.mark.slow
 def test_T10_4_a_host_without_pango_gets_an_error_for_the_pdf_and_the_app_stays_up(
     demo_env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
@@ -369,3 +571,15 @@ def test_T10_4_a_host_without_pango_gets_an_error_for_the_pdf_and_the_app_stays_
     at.button(key="export.xlsx").click().run()
     assert not at.exception
     assert any(".xlsx" in s.value for s in at.success)  # the Excel export does not need Pango
+
+    # every visitor shares this run: an export that exists is offered, not built again (a rebuild
+    # rewrites the file while another visitor downloads it)
+    at.run()
+    assert not any(b.key == "export.xlsx" for b in at.button)
+    assert any(d.proto.label.endswith(".xlsx") for d in at.get("download_button"))
+    assert any(b.key == "export.pdf" for b in at.button)  # the PDF failed: still to build
+    monkeypatch.setenv(demo.DEMO_ENV, "0")  # the full app is one user's: it offers the build
+    local = AppTest.from_file(str(APP / "pages/6_Results.py"), default_timeout=TIMEOUT)
+    local.session_state["run_dir"] = str(run)
+    local.run()
+    assert any(b.key == "export.xlsx" for b in local.button)

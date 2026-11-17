@@ -35,8 +35,14 @@ def safe_run_name(root: Path, ref: str | None) -> str | None:
 
 
 def setup(title_key: str) -> tuple[Lang, Path | None]:
-    """`state.setup` after dropping a `?run=` that is not a run folder of the runs root."""
+    """`state.setup` after dropping a `?run=` that is not a run folder of the runs root. Not on an
+    address the full app refuses to serve: the page then answers with an error, whatever the URL
+    names, and keeping or dropping the parameter would tell a caller which runs exist."""
     ref = st.query_params.get(PARAM)
-    if ref is not None and safe_run_name(state.runs_root(), ref) is None:
+    if (
+        ref is not None
+        and not state.exposed_without_auth()
+        and safe_run_name(state.runs_root(), ref) is None
+    ):
         del st.query_params[PARAM]
     return state.setup(title_key)

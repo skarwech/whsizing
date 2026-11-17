@@ -8,7 +8,8 @@ after writing the message to stderr: both are captured here and come back as `Cl
 ponytail: `redirect_stdout` and the stage timings of `whsizing.logging` are process-wide, so the
 commands run one at a time (`_LOCK`): enough for the one-user local app and for the hosted demo
 (a few visitors, each command a few seconds); a busy multi-user server would run the CLI in a
-subprocess per call instead.
+subprocess per call instead. A command that finds the lock taken waits `WAIT_S`, then fails with
+`BUSY_CODE` instead of hanging for as long as the other one (Streamlit cannot interrupt it).
 """
 
 from __future__ import annotations
@@ -25,6 +26,8 @@ import typer
 
 HINTS = ("(traceback in", "(no run folder;")  # what `handle_errors` appends to an exit 1
 _LOCK = threading.RLock()  # one command at a time (see the module docstring)
+WAIT_S = 120.0  # [P] how long a command waits for the one that runs, before it gives up
+BUSY_CODE = 75  # EX_TEMPFAIL of sysexits.h: try again later
 
 
 @dataclass(frozen=True)
@@ -49,15 +52,19 @@ class CliError(Exception):
 
 
 def call(command: Callable[..., Any], **kwargs: Any) -> CliResult:
-    """`command(**kwargs)` with its output captured; `CliError` on a non-zero exit."""
+    """`command(**kwargs)` with its output captured; `CliError` on a non-zero exit, or with
+    `BUSY_CODE` when another command still runs after `WAIT_S`."""
     out, err = io.StringIO(), io.StringIO()
-    with _LOCK:
-        try:
-            with redirect_stdout(out), redirect_stderr(err):
-                command(**kwargs)
-        except typer.Exit as e:
-            if e.exit_code:
-                raise CliError(e.exit_code, _message(err.getvalue())) from e
+    if not _LOCK.acquire(timeout=WAIT_S):
+        raise CliError(BUSY_CODE, f"another command has been running for over {WAIT_S:g} s")
+    try:
+        with redirect_stdout(out), redirect_stderr(err):
+            command(**kwargs)
+    except typer.Exit as e:
+        if e.exit_code:
+            raise CliError(e.exit_code, _message(err.getvalue())) from e
+    finally:
+        _LOCK.release()
     return CliResult(out.getvalue(), err.getvalue())
 
 

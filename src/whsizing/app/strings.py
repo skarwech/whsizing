@@ -102,16 +102,39 @@ UI: dict[str, tuple[str, str]] = {
         "Uploads are disabled on the public demo: client data must not leave your machine. Use "
         "the demo data below, or install the tool locally for your files.",
     ),
+    "demo.limit.horizon": (
+        "Démo publique : {name} ne peut pas dépasser {max} ans (l'application locale n'a pas "
+        "cette limite).",
+        "Public demo: {name} cannot exceed {max} years (the local app has no such limit).",
+    ),
+    "demo.limit.scenarios": (
+        "Démo publique : {max} scénarios au plus.",
+        "Public demo: at most {max} scenarios.",
+    ),
+    "demo.limit.constant": (
+        "Démo publique : la constante {id} ne peut pas être surchargée.",
+        "Public demo: the constant {id} cannot be overridden.",
+    ),
+    "demo.limit.range": (
+        "Démo publique : {id} doit rester dans la plage du catalogue [{lo:g}, {hi:g}].",
+        "Public demo: {id} must stay within the catalog range [{lo:g}, {hi:g}].",
+    ),
+    "demo.busy": (
+        "Le serveur de démo est occupé par la commande d'un autre visiteur : réessayez dans "
+        "une minute.",
+        "The demo server is busy with another visitor's command: try again in a minute.",
+    ),
     "guard.exposed": (
-        "Cette application n'a pas d'authentification : elle refuse de démarrer sur une adresse "
+        "Cette application n'a pas d'authentification : elle ne sert pas ses pages sur une adresse "
         "accessible du réseau. Lancez-la avec `just app` (adresse 127.0.0.1), ou avec "
-        "`--server.address 127.0.0.1`. Derrière un proxy authentifié, définissez "
-        "WHSIZING_ALLOW_REMOTE=1. Pour une démo publique sur données synthétiques, "
-        "utilisez `streamlit_app.py`.",
-        "This app has no authentication: it refuses to start on an address the network can "
-        "reach. Start it with `just app` (address 127.0.0.1) or with "
-        "`--server.address 127.0.0.1`. Behind an authenticating proxy, set "
-        "WHSIZING_ALLOW_REMOTE=1. For a public demo on synthetic data use `streamlit_app.py`.",
+        "`--server.address 127.0.0.1 --server.maxUploadSize 1024`. Derrière un proxy "
+        "authentifié, définissez WHSIZING_ALLOW_REMOTE=1. Pour une démo publique sur données "
+        "synthétiques, utilisez `streamlit_app.py`.",
+        "This app has no authentication: it does not serve its pages on an address the network "
+        "can reach. Start it with `just app` (address 127.0.0.1) or with "
+        "`--server.address 127.0.0.1 --server.maxUploadSize 1024`. Behind an authenticating "
+        "proxy, set WHSIZING_ALLOW_REMOTE=1. For a public demo on synthetic data use "
+        "`streamlit_app.py`.",
     ),
     # -- page 1
     "upload.title": ("1 Téléversement et mapping", "1 Upload and mapping"),
@@ -130,6 +153,14 @@ UI: dict[str, tuple[str, str]] = {
         "ou chemin sur la machine qui exécute l'application (usage local uniquement ; "
         "fichier volumineux, motif accepté)",
         "or a path on the machine running the app (local use only; large file, glob accepted)",
+    ),
+    "upload.cap": (
+        "Ce serveur limite un fichier téléversé à {mb} Mo (la configuration de la démo, dans "
+        "`.streamlit/config.toml`). Pour un fichier plus gros, lancez l'application avec "
+        "`just app` (ou avec `--server.maxUploadSize 1024`), ou utilisez le chemin ci-dessous.",
+        "This server limits an uploaded file to {mb} MB (the demo's configuration, in "
+        "`.streamlit/config.toml`). For a larger file start the app with `just app` (or with "
+        "`--server.maxUploadSize 1024`), or use the path field below.",
     ),
     "upload.nothing": ("Aucun fichier choisi.", "No file chosen."),
     "upload.too_big": (

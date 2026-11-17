@@ -587,14 +587,15 @@ dataset or the basis. Nodes exist per world (`lo`, `typ`, `hi`); the tree above 
 
 ```bash
 export WHSIZING_SALT=<secret>        # or type the salt on page 1
-just app                             # = uv run streamlit run src/whsizing/app/Home.py --server.address 127.0.0.1
+just app                             # = uv run streamlit run src/whsizing/app/Home.py --server.address 127.0.0.1 --server.maxUploadSize 1024
 just demo-app                        # the public demo: synthetic data only, no upload (streamlit_app.py)
 ```
 
-Run it **from the repository root** so `.streamlit/config.toml` applies (`maxUploadSize` 1024 MB;
-usage statistics off; larger files: use the CLI). The full app has no authentication: it refuses to
-start unless Streamlit's `server.address` is `127.0.0.1` (`just app` sets it) or
-`WHSIZING_ALLOW_REMOTE=1` is set. `streamlit_app.py` is the demo that is deployed on Streamlit
+Run it **from the repository root** so `.streamlit/config.toml` applies (usage statistics off; the
+recipe passes `--server.maxUploadSize 1024`, the config itself keeps a 1 MB cap for the hosted demo;
+larger files: use the CLI). The full app has no authentication: unless
+Streamlit's `server.address` is `127.0.0.1` (`just app` sets it) or `WHSIZING_ALLOW_REMOTE=1` is
+set, every page answers with an error instead of the app. `streamlit_app.py` is the demo that is deployed on Streamlit
 Community Cloud: see `docs/DEPLOY_STREAMLIT.md`. Six pages: 1 Upload & mapping, 2 Data quality,
 3 Demand profile, 4 Design basis, 5 Scenarios, 6 Results (comparison, FTE chart, block diagrams,
 business case, the "why this number?" drill-down, export buttons). The UI has no logic of its own:
@@ -689,6 +690,8 @@ scenario is not computed, none fits the building, or an automated scenario assum
 | `already sized and runs are immutable` (exit 2) | `size`, `profile` and `ingest --run` refuse a run that has `design/` or `manifest.json`. Ingest into a new run, or `rerun`. |
 | `not sized yet; run whsizing size first` (`compare`, `report`) or `no inputs/project.yaml (run whsizing size first)` (`calibrate`) | These commands need a sized run (I78 b): run `size` or `run-all` first. |
 | `flows.inbound_mode is 'receipts' but ...` (exit 2) | receipts mode with no receipts in the history window or none on a candidate day: load receipts for the window or use `derived` (I71). |
+| `<file>: nothing to read from header row N on` (exit 2), or for an Excel file `sheet ... has N row(s), fewer than the mapping's header_row` | an empty export, or a saved mapping whose `header_row` is past the last line of this file: check the file, or ingest it without `--mapping` so that the header row is sniffed again. |
+| `<file>: header cell N starts with ^ and ends with $` (exit 2) | polars reads such a name as a regular expression, so no column can carry it: the file is not a text export (a binary file does this now and then), or that column needs another name. |
 | `unknown parameter id` in overrides | the id is `<family>.<name>` of `docs/assumptions.md` (message suggests close ids). |
 | basis `ConfigError` naming a field | unknown key, NaN, a divisor ≤ 0, a share out of range (I60); fix the YAML (times quoted). |
 | `F_NO_FIT` on a scenario | total area above the building: read the area table; not an error. |

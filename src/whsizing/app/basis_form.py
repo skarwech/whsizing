@@ -232,6 +232,8 @@ def _mapping_widget(
         parsed = yaml.safe_load(edited) if edited.strip() else {}
     except yaml.YAMLError as e:
         return value, f"{leaf.path}: {e}"
+    except (ValueError, RecursionError) as e:  # a 5000-digit integer, 3000 nested `[`: no YAMLError
+        return value, f"{leaf.path}: {type(e).__name__}: {str(e)[:200]}"
     if not isinstance(parsed, dict):
         return value, f"{leaf.path}: expected `name: value` lines"
     return parsed, None

@@ -13,8 +13,6 @@ from whsizing.report import Lang
 from whsizing.schemas.ingest import DQReport, Mapping
 from whsizing.schemas.params import DatasetKind
 
-DATASET_ORDER: tuple[DatasetKind, ...] = ("sku_master", "order_lines", "inventory", "receipts")
-
 
 def ingest_section(
     lg: Lang, run: Path | None, dataset: DatasetKind, files: list[Path], mapping: Mapping
@@ -61,7 +59,10 @@ def main(uploaded: list[Path]) -> None:
         demo_ui.section(lg)
         st.stop()
     st.caption(tr("upload.privacy", lg))
-    dataset: DatasetKind = st.selectbox(tr("upload.dataset", lg), DATASET_ORDER, key="up.dataset")
+    cap = ingest_ui.upload_cap_mb()
+    if cap < ingest_ui.DEFAULT_UPLOAD_CAP_MB:  # started with the demo's config, not with `just app`
+        st.caption(tr("upload.cap", lg, mb=cap))
+    dataset: DatasetKind = st.selectbox(tr("upload.dataset", lg), demo.DATASETS, key="up.dataset")
     if dataset != "sku_master":
         st.caption(tr("upload.order", lg))
     files = ingest_ui.collect_files(dataset, lg, uploaded)

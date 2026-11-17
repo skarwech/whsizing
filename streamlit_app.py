@@ -17,13 +17,18 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-os.environ.setdefault("WHSIZING_DEMO_ONLY", "1")
+os.environ["WHSIZING_DEMO_ONLY"] = "1"  # assigned, not defaulted: no setting of the deployer can
+# turn the hosted app into the open one (uploads, a typed server path)
 os.environ.setdefault("WHSIZING_RUNS", str(Path(tempfile.gettempdir()) / "whsizing-demo" / "runs"))
 os.environ.setdefault("WHSIZING_CATALOG", str(ROOT / "catalog"))
 if importlib.util.find_spec("whsizing") is None:  # dependencies installed, the project itself not
     sys.path.insert(0, str(ROOT / "src"))
 
 import streamlit as st  # noqa: E402
+
+# An unexpected error shows its type to a visitor, not its message and frames (server paths, source
+# lines): the expected ones (a command that fails, a rejected input) are messages of the pages.
+st.set_option("client.showErrorDetails", "type")
 
 APP = "src/whsizing/app"  # keep in step with whsizing.app.demo_ui.APP (a test checks it)
 PAGES = (

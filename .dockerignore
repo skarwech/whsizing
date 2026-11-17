@@ -2,6 +2,15 @@
 .git
 runs
 data/generated
+# secrets and client data never go into an image (same list as .gitignore)
+**/.env
+**/*.salt
+salt*
+.streamlit/secrets.toml
+secrets.yaml
+client_data
+.coverage
+.hypothesis
 **/__pycache__
 .pytest_cache
 .ruff_cache
