@@ -234,6 +234,8 @@ def _mapping_widget(
         return value, too_long
     try:
         parsed = demo_limits.parse_yaml(edited) if edited.strip() else {}
+    except demo_limits.AliasError:
+        return value, tr("demo.limit.alias", lg, name=leaf.path)
     except yaml.YAMLError as e:
         return value, f"{leaf.path}: {e}"
     except (ValueError, RecursionError) as e:  # a 5000-digit integer, 3000 nested `[`: no YAMLError

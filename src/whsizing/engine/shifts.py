@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from whsizing.design.validate import shift_hours_error
 from whsizing.engine.inputs import WORLDS, WorldInputs, to_range
 from whsizing.errors import ConfigError, WhsizingError
 from whsizing.schemas import ActivityLabor, LaborResult, Range, ShiftRow, World
@@ -98,8 +99,8 @@ def shifts(inp: WorldInputs) -> tuple[np.ndarray, tuple[tuple[float, float], ...
     ending at midnight ends at 24.0 and one crossing it ends after 24 (16 → 26 = 02:00)."""
     ops = inp.basis.operations
     n, length = ops.shifts_per_day, ops.hours_per_shift
-    if n * length > 24:
-        raise ConfigError(f"operations: {n} shifts × {length} h exceed 24 h")
+    if (problem := shift_hours_error(n, length)) is not None:
+        raise ConfigError(problem)
     start = hour(inp.catalog.labor.profiles.inbound_window[0])
     idx = ((np.arange(24) + 0.5 - start) % 24 // length).astype(int)
     refs = {"window": PROFILE["window"], "hours_per_shift": f"{OPS}hours_per_shift"}

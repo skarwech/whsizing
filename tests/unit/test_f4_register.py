@@ -766,6 +766,32 @@ def test_I60_override_numeric_text_accepted_like_typed_fields(
     assert load_basis(typed).projection.growth_rate == 0.04  # same notation, typed field
 
 
+def test_I60_shifts_that_add_up_to_more_than_a_day_are_refused_with_the_basis(
+    tmp_path: Path,
+) -> None:
+    """4 shifts of 7 h: the engine refuses it at sizing, after the design day was written, which
+    leaves a run that is sized, sealed and cannot be compared. The basis refuses it first."""
+    basis = load_basis(GOLDEN / "golden_basis.yaml")
+
+    def with_shifts(n: int, hours: float) -> DesignBasis:
+        ops = basis.operations.model_copy(update={"shifts_per_day": n, "hours_per_shift": hours})
+        return basis.model_copy(update={"operations": ops})
+
+    assert check_basis(with_shifts(3, 8.0)).operations.shifts_per_day == 3  # 24 h: allowed
+    with pytest.raises(ConfigError, match=r"operations: 4 shifts × 7\.0 h exceed 24 h"):
+        check_basis(with_shifts(4, 7.0))
+    text = (GOLDEN / "golden_basis.yaml").read_text(encoding="utf-8")
+    path = tmp_path / "basis.yaml"  # and the loader of the CLI (`size` reads it before anything)
+    path.write_text(
+        text.replace("shifts_per_day: 1", "shifts_per_day: 4").replace(
+            "hours_per_shift: 7.5", "hours_per_shift: 7"
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match=r"4 shifts × 7\.0 h exceed 24 h"):
+        load_basis(path)
+
+
 def test_I60_non_numeric_override_text_rejected(tmp_path: Path) -> None:
     text = (GOLDEN / "golden_basis.yaml").read_text(encoding="utf-8")
     path = tmp_path / "basis.yaml"

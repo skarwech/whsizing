@@ -59,7 +59,7 @@ def uploads_dir() -> Path:
 
 def upload_cap_mb() -> int:
     """The largest upload this server takes (`server.maxUploadSize`, MB). `.streamlit/config.toml`
-    sets 1 (the hosted demo takes no upload); `just app` passes 1024."""
+    sets 0 (the hosted demo takes no upload); `just app` passes 1024."""
     try:
         return int(st.get_option("server.maxUploadSize"))
     except (TypeError, ValueError):

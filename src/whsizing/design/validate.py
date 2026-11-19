@@ -59,6 +59,12 @@ def leaf_fields(model: BaseModel, prefix: str = "") -> list[tuple[str, BaseModel
     return out
 
 
+def shift_hours_error(shifts: int, hours: float) -> str | None:
+    """The shifts of a day follow one another, so they cannot add up to more than 24 h (the
+    engine refuses it too, but only at sizing, after the design day was written)."""
+    return f"operations: {shifts} shifts × {hours} h exceed 24 h" if shifts * hours > 24 else None
+
+
 def check_basis(basis: DesignBasis, overrides: dict[str, Any] | None = None) -> DesignBasis:
     """I60: no NaN / ±inf float (mapping values included) in the sized sections, and the RULES
     ranges; a failure → ConfigError naming each field. `overrides`: the values as read from the
@@ -73,6 +79,9 @@ def check_basis(basis: DesignBasis, overrides: dict[str, Any] | None = None) -> 
             wrong.append(f"{path} = {value!r} (must be finite)")
         elif path in RULES and not RULES[path][0](value):
             wrong.append(f"{path} = {value!r} (must be {RULES[path][1]})")
+    ops = basis.operations
+    if (problem := shift_hours_error(ops.shifts_per_day, ops.hours_per_shift)) is not None:
+        wrong.append(problem)
     wrong += _override_errors(basis.overrides, overrides or basis.overrides)
     if wrong:
         raise ConfigError(f"basis: invalid value(s): {'; '.join(wrong)}")

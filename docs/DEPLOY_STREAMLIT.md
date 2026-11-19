@@ -33,7 +33,7 @@ the open app. In demo mode:
 | Commands | one at a time per server process (`calls._LOCK`) | same; one that waits more than 2 minutes behind another gives up with a "server busy" message |
 | Inputs | any | bounded, see below |
 | Unexpected errors | the traceback of the page | the type of the error only (`client.showErrorDetails = type`) |
-| Upload route | up to 1 GB (`just app` raises `server.maxUploadSize`) | none: `.streamlit/config.toml` sets `server.maxUploadSize = 0`, so every body is refused (413). Streamlit serves the route even without an uploader and keeps what it takes in memory: with a cap of 1 MB, 300 requests of 0.9 MB were kept (+283 MB) |
+| Upload route | up to 1 GB (`just app` raises `server.maxUploadSize`) | none: `.streamlit/config.toml` sets `server.maxUploadSize = 0`, so every non-empty body is refused (413). Streamlit serves the route even without an uploader and keeps what it takes in memory: with a cap of 1 MB, 300 requests of 0.9 MB were kept (+283 MB). An empty upload sent in chunks is still recorded, with its name and type (about 4 KB per request, some 230 times less than at a cap of 1 MB): an accepted residual |
 
 Why uploads are off: the specification (C2) keeps client data on the team's machines, and a hosted
 demo is somebody else's server. Do not put real client data in a deployed copy.
@@ -50,9 +50,9 @@ full app have no such limits):
 | `finance.horizon_years`, `projection.horizon_years` | at most 20 years | `finance.horizon_years` of 320: about 51 s and 2.4 GB in `compare` (20 years take about 8 s); a 320-year `projection.horizon_years` is refused by the engine's own guard in 2 s |
 | number of scenarios | at most 6 | 30 scenarios: about 102 s in `compare`; the PDF of 20 scenarios: 34 s and 46 pages |
 | an override of a constant (`engine.max_equipment_count` and the other structural scalars) | not allowed | that guard refuses a queue model that needs millions of stations (a packing rate far below the catalog's asks for 1.3 to 2.8 million: refused in 2 s). Lifted, a security review saw the engine run for minutes on such an input; a later audit measured 10 s with the packing rate, so this limit is kept as a precaution |
-| an override of a parameter | inside the catalog's own range (`min` to `max`) | defence in depth: with the guard in place a value far outside the range is refused by the engine in 2 s, and the range keeps the numbers of the demo meaningful |
+| an override of a parameter | inside the catalog's own range (`min` to `max`) | the engine's guard trips only for a value that pushes a queue model over 100,000 stations (a packing rate about a million times too low, refused in 2 s); one 700 times below the range (0.055 for a range of 40 to 70) is sized without error. The range limit bounds the rest and keeps the numbers of the demo meaningful |
 | `operations.shifts_per_day` | at most 4 | 300 shifts of a few minutes (the library only asks for one shift at least, and 24 hours in all): 34 s and 2.1 GB in `size` and `compare`; 1,000 shifts about 2 minutes and 4 GB |
-| a text: the client, the site, a scenario's id or name, an override's id | at most 200 characters (the demo's longest is 47); a YAML box of overrides at most 10,000, without aliases (`*name`) | a 2 MB box was parsed again at every rerun (5.7 s of CPU each, outside the locks); 200 KB of YAML with a few aliases took 7 s and 2.5 GB at every rerun; a 400,000-character client name made the PDF take 14 s under the lock |
+| a text: the client, the site, a scenario's id or name, an override's id | at most 200 characters (the demo's longest is 47); a YAML box of overrides at most 10,000, without aliases (`*name`) | a 2 MB box was parsed again at every rerun (5.7 s of CPU each, outside the locks); 200 KB of YAML with a few aliases took 7 s and 2.5 GB at every rerun; a 400,000-character client name without spaces made the PDF take 14 s under the lock, and 20,000 characters of words took 20 s and added 10 pages |
 
 A number typed as text (`"0.000055"`, `1e-5`, which YAML reads as text) is checked like a number: the
 library reads it as one.
@@ -88,7 +88,7 @@ just demo-app          # = uv run streamlit run streamlit_app.py --server.addres
    - Repository: `<your-user>/whsizing`, Branch: `main`
    - **Main file path: `streamlit_app.py`**
    - Optional: a custom subdomain.
-3. **Advanced settings**: Python version **3.12**, chosen explicitly: the lock was made and tested on 3.12 (`requires-python` is `>=3.12`), and the platform's default follows the newest Python that Streamlit supports, which may be a newer one.
+3. **Advanced settings**: Python version **3.12**, chosen explicitly: the lock was made and tested on 3.12 (`requires-python` is `>=3.12`), and the platform's default may differ from it (its documentation names 3.12 for now, and says it follows new Streamlit-supported versions), so the choice is made here, not left to a default.
    Secrets are optional: `WHSIZING_LANG = "fr"` makes French the default language (otherwise the
    browser's language decides), `WHSIZING_SALT = "..."` replaces the random salt. Write them at the
    top of the secrets text, outside any `[section]`: only top-level keys become environment
@@ -133,9 +133,9 @@ Checked on the build machine (macOS with Docker Desktop), on a clean copy of the
   earlier version of the file listed `libharfbuzz-subset0`, which Debian 11 does not have),
   `uv sync --frozen` on Python 3.12, then the app served to a headless Chromium. The finished
   example opens in about 16 s on the build machine, the Excel and the PDF (17 pages) are built,
-  and neither the page nor the server log shows an error. It ran in an arm64 container, and
-  Debian 11's own repositories are archived now, so the image reads them from
-  `archive.debian.org`.
+  and neither the page nor the server log shows an error. It ran in an arm64 container, and the
+  image pins `archive.debian.org` for Debian 11 (the stock repositories answered 404 for some
+  security packages when it was built).
 - `streamlit_app.py` under Streamlit's `AppTest` (`tests/e2e/test_f10_app_demo.py`,
   `tests/unit/test_f10_app_demo_data.py`): banner, no uploader, language kept across pages, visitors
   separated, the finished example built once and opened by two visitors, the step-by-step path sized

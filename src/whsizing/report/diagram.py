@@ -259,7 +259,7 @@ def _canvas_dpi(layout: Layout, w_px: float, h_px: float) -> float | None:
     if pixels <= CANVAS_BUDGET_PX:
         return None
     fitted = dpi * math.sqrt(CANVAS_BUDGET_PX / pixels)
-    if fitted < MIN_CANVAS_DPI:
+    if not fitted >= MIN_CANVAS_DPI:  # written so that a NaN (a non-finite plan) is refused too
         width_m, height_m = (w_px - sum(MARGIN_PX[:2])) / PX_PER_M, h_px / PX_PER_M
         raise ConfigError(
             f"block diagram of {layout.scenario_id or 'a scenario'}: the plan is too large to "

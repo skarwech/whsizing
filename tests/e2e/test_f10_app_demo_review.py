@@ -21,6 +21,7 @@ from streamlit.testing.v1 import AppTest
 from whsizing.app import calls, demo, demo_limits, state
 from whsizing.app.calls import BUSY_CODE, CliError, CliResult
 from whsizing.app.strings import tr
+from whsizing.report import Lang
 
 ROOT = Path(__file__).resolve().parents[2]
 ENTRY = ROOT / "streamlit_app.py"
@@ -59,10 +60,10 @@ def run(demo_env: SimpleNamespace) -> Path:
     return demo.load_demo(demo_env.runs)
 
 
-def page(name: str, run: Path) -> AppTest:
+def page(name: str, run: Path, lang: Lang = "en") -> AppTest:
     at = AppTest.from_file(str(APP / "pages" / name), default_timeout=TIMEOUT)
     at.session_state["run_dir"] = str(run)
-    at.session_state["lang"] = "en"
+    at.session_state["lang"] = lang
     return at.run()
 
 
@@ -160,6 +161,46 @@ def test_a_run_sized_by_another_tab_gets_the_demo_message_not_the_advice_of_the_
     assert not at.error and "whsizing rerun" not in " ".join(infos)
 
 
+# ------------------------------------------------- a basis the engine would refuse, a failed run
+def test_shifts_that_exceed_a_day_are_refused_on_page_4_before_any_sizing(run: Path) -> None:
+    """4 shifts is what the demo allows, and at the demo's 7 h a shift that makes 28 h: the engine
+    refused it at sizing, after writing the design day, which left a run that is sized, sealed and
+    cannot be compared. Page 4 says it now, and Save stays disabled."""
+    at = page("4_Design_basis.py", run)
+    at.number_input(key=f"basis.{run.name}.operations.shifts_per_day").set_value(4).run()
+    assert not at.exception
+    shown = [e.value for e in at.error]
+    assert any("4 shifts × 7.0 h exceed 24 h" in text for text in shown), shown
+    assert next(b for b in at.button if b.label == tr("basis.save", "en")).disabled
+    assert state.stage(run) == "ingested"
+
+
+@pytest.mark.parametrize("lang", ["fr", "en"])
+def test_the_alias_refusal_speaks_the_visitors_language(run: Path, lang: Lang) -> None:
+    at = page("4_Design_basis.py", run, lang)
+    at.text_area(key=f"basis.{run.name}.overrides").set_value("a: &x 1\nb: *x").run()
+    assert not at.exception
+    assert tr("demo.limit.alias", lang, name="overrides") in [e.value for e in at.error]
+
+
+def test_a_run_whose_sizing_failed_says_so_on_pages_5_and_6_not_that_it_is_sealed(
+    run: Path,
+) -> None:
+    """A growth rate of 9 (900 %) sizes no scenario (exit 4) after the design day was written: the
+    run reads as sized, cannot be sized again, and the pages told the visitor to 'follow the pages
+    in order' or that the run 'is sized and immutable'. They say sizing did not finish."""
+    draft = run / "ui" / "basis.yaml"
+    basis = yaml.safe_load(draft.read_text(encoding="utf-8"))
+    projection = {**basis["projection"], "growth_rate": 9}  # 900 % a year: no equipment count fits
+    draft.write_text(yaml.safe_dump({**basis, "projection": projection}), encoding="utf-8")
+    with pytest.raises(CliError) as failed:
+        demo.size_demo(run, ROOT / "catalog")
+    assert failed.value.code == 4 and state.stage(run) == "sized"
+    for name in ("5_Scenarios.py", "6_Results.py"):
+        infos = [i.value for i in page(name, run).info]
+        assert tr("run.unfinished", "en") in infos, (name, infos)
+
+
 # ---------------------------------------------------- size and compare under one lock
 def test_size_then_compare_are_called_while_one_visitor_holds_the_lock_on_page_5(
     monkeypatch: pytest.MonkeyPatch, run: Path
@@ -254,5 +295,7 @@ def test_a_form_value_no_rule_refuses_is_a_message_on_page_4_not_an_exception(
         at.number_input(key=key).set_value(value).run()
     assert not at.exception
     shown = " ".join(e.value for e in at.error)
-    assert shown  # a message, named after the error's type
-    assert os.environ["WHSIZING_RUNS"] not in shown  # and with no folder of the server
+    assert tr("basis.preview_failed", "en", type="").split("(")[0] in shown, shown  # a message
+    assert os.environ["WHSIZING_RUNS"] not in shown  # with no folder of the server
+    assert "POLARS" not in shown  # nor a setting of the library a visitor cannot reach
+    assert next(b for b in at.button if b.label == tr("basis.save", "en")).disabled

@@ -6,14 +6,15 @@ work or gigabytes, measured on the demo study: a `finance.horizon_years` of 320 
 2.4 GB, 30 scenarios take 102 s, 300 shifts per day take 34 s and 2.1 GB, and a 2 MB YAML box is
 parsed again on every rerun. The engine's own guard (`engine.max_equipment_count`) refuses a queue
 model that needs millions of stations, so an override of a constant (it would lift the guard) and
-of a parameter far outside its catalog range (it trips the guard) are refused as well. The library
-allows all of it (the user's machine is theirs), so the public demo bounds the inputs that cost the
-most; the full app has no limits.
+of a parameter outside its catalog range (the guard trips only for the most extreme values) are
+refused as well. The library allows all of it (the user's machine is theirs), so the public demo
+bounds the inputs that cost the most; the full app has no limits.
 """
 
 from __future__ import annotations
 
 import os
+import re
 import sys
 import tempfile
 from collections.abc import Mapping
@@ -28,13 +29,15 @@ from whsizing.catalog import Catalog
 
 MAX_HORIZON_YEARS = 20  # [P] `finance` and `projection` horizons: 20 years compare in about 8 s
 MAX_SCENARIOS = 6  # [P] compare and the sensitivity cost grows with each; a report reads to 8 (I81)
-MAX_SHIFTS = (
-    4  # [P] `operations.shifts_per_day`: plants run one to three; each costs (300: 34 s, 2 GB)
-)
-MAX_TEXT_CHARS = 200  # [P] one name or label: the demo's longest is 47; PDF text costs 25 s per MB
+# [P] `operations.shifts_per_day`: plants run one to three; each costs (300 shifts: 34 s, 2 GB)
+MAX_SHIFTS = 4
+# [P] one name or label: the demo's longest is 47; 20,000 characters of words cost 20 s of PDF
+MAX_TEXT_CHARS = 200
 MAX_YAML_CHARS = 10_000  # [P] the YAML box of an override list: all 72 parameters are about 3 000
 MAX_TEXT_PROBLEMS = 3  # more long texts than this are not listed one by one
 MAX_DEPTH = 8  # how deep into the nested dicts and lists the search for long texts goes
+# "(see <runs>/2026-.../)": the library points at the folder of a run, which a visitor cannot open
+_POINTER = re.compile(r"\s*\(see <(?:runs|work|app|tmp|home|python)>[^)]*\)")
 # basis field -> the largest value the demo sizes
 MAXIMA: Mapping[str, float] = {"operations.shifts_per_day": MAX_SHIFTS}
 MIN_FOLDER_LENGTH = 4  # a folder name shorter than this ("/", "/tmp") is not worth hiding
@@ -124,7 +127,8 @@ def _long_texts(value: object, path: str, depth: int = 0) -> list[str]:
 
 def _text_problems(basis: Mapping[str, Any], cards: list[Mapping[str, Any]]) -> list[Problem]:
     """A text over `MAX_TEXT_CHARS` anywhere in the basis or the scenarios: it reaches the PDF and
-    the Excel (25 s per MB under the lock), the messages and the drafts on disk."""
+    the Excel (20,000 characters of words took 20 s under the lock), the messages and the drafts
+    on disk."""
     found = [*_long_texts(basis, "basis"), *_long_texts(cards, "scenarios")][:MAX_TEXT_PROBLEMS]
     return [("demo.limit.text", {"name": path, "max": MAX_TEXT_CHARS}) for path in found]
 
@@ -147,6 +151,10 @@ def limit_problems(
     return [*problems, *_override_problems(basis, cards, catalog), *_text_problems(basis, cards)]
 
 
+class AliasError(yaml.YAMLError):
+    """A YAML alias (`*name`) in the public demo."""
+
+
 class _NoAliasLoader(yaml.SafeLoader):
     """A SafeLoader that refuses aliases (`*name`): a few anchors expand to millions of values (a
     200 KB paste took 7 s and 2.5 GB, and again at every rerun), and nothing a visitor types in
@@ -154,7 +162,7 @@ class _NoAliasLoader(yaml.SafeLoader):
 
     def compose_node(self, parent: Any, index: Any) -> Any:  # pyright: ignore[reportIncompatibleMethodOverride]
         if self.check_event(yaml.events.AliasEvent):
-            raise yaml.YAMLError("an alias (*name) is not allowed in the public demo")
+            raise AliasError("an alias (*name) is not allowed in the public demo")
         return super().compose_node(parent, index)  # pyright: ignore[reportUnknownMemberType]
 
 
@@ -201,4 +209,4 @@ def scrub(text: str) -> str:
     for folder, label in sorted(folders, key=lambda item: len(item[0]), reverse=True):
         if len(folder) >= MIN_FOLDER_LENGTH:
             text = text.replace(folder, label)
-    return text
+    return _POINTER.sub("", text)

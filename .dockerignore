@@ -1,8 +1,8 @@
 .venv
 .git
-runs
+**/runs
 data/generated
-# secrets and client data never go into an image: the list of .gitignore, with its depths (a
+# secrets and client data never go into an image: the lists of .gitignore, with its depths (a
 # pattern without a slash matches at any depth there, only at the root here unless it starts with **/)
 **/.env
 **/*.salt

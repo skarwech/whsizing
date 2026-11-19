@@ -28,6 +28,20 @@ UI: dict[str, tuple[str, str]] = {
         "This run is already sized (another tab?) and runs are immutable: reload the page to see "
         "it, or load the demo data again for a new run.",
     ),
+    "run.unfinished": (
+        "Le dimensionnement de ce run n'a pas abouti (ou sa comparaison a échoué) et les runs sont "
+        "immuables : démarrez un nouveau run (page 1, ou « Charger les données de démo » sur la "
+        "page d'accueil).",
+        "Sizing this run did not finish (or its comparison failed) and runs are immutable: start a "
+        "new run (page 1, or 'Load the demo data' on the home page).",
+    ),
+    "basis.preview_failed": (
+        "Aperçu du jour de dimensionnement impossible avec ces valeurs ({type}) : vérifiez ce que "
+        "vous venez de modifier (un fuseau horaire, un poids ou une fenêtre hors du domaine "
+        "habituel).",
+        "The design-day preview cannot be computed with these values ({type}): check what you "
+        "changed last (a time zone, a weight or a time window outside the usual range).",
+    ),
     "stage_missing": (
         "Ce run est à l'étape « {have} » ; cette page demande l'étape « {stage} ». Suivez les "
         "pages dans l'ordre (1 à 6).",
@@ -126,6 +140,10 @@ UI: dict[str, tuple[str, str]] = {
     "demo.limit.text": (
         "Démo publique : {name} est un texte trop long ({max} caractères au plus).",
         "Public demo: {name} is too long (at most {max} characters).",
+    ),
+    "demo.limit.alias": (
+        "Démo publique : {name} : les alias YAML (*nom) ne sont pas acceptés.",
+        "Public demo: {name}: YAML aliases (*name) are not allowed.",
     ),
     "demo.limit.scenarios": (
         "Démo publique : {max} scénarios au plus.",

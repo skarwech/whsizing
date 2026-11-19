@@ -40,7 +40,7 @@ lg, run = entry.setup("scn.title")
 state.banner(lg)
 run = state.require_run(lg, run, "ingested")
 if state.reached(run, "sized"):
-    st.info(tr("scn.sealed", lg))
+    st.info(tr("scn.sealed" if state.reached(run, "compared") else "run.unfinished", lg))
     saved = state.saved_path(run, "scenarios")
     if saved is not None:
         st.code(saved.read_text(encoding="utf-8"), language="yaml")

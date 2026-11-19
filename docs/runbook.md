@@ -49,7 +49,8 @@ docker run --rm --entrypoint sh -e WHSIZING_SALT=choose-a-secret -v "$(pwd)/runs
   -c 'whsizing synth data/synth/profiles/ecom_mid.yaml && whsizing run-all project/example_project.yaml'
 ```
 
-The `docker run` form is what the CI job `docker-smoke` runs on every push (the image is built from
+The `docker run` form is what the CI job `docker-smoke` runs on every push to main and every pull
+request, once lint, typecheck and the tests pass (the image is built from
 the `Dockerfile`, `run-all` runs inside it, and the PDF and the Excel are opened afterwards). `just
 demo` is the same flow without Docker (synth, then `run-all`).
 

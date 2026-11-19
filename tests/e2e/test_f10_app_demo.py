@@ -528,7 +528,11 @@ def test_T10_4_the_demo_names_the_limit_instead_of_freezing_on_a_huge_input(
     assert tr("demo.limit.scenarios", "en", max=demo_limits.MAX_SCENARIOS) in [
         e.value for e in at.error
     ]
-    assert size_button(at).disabled  # (a click on it is forced in test_f10_app_demo_review.py)
+    assert size_button(at).disabled
+    forged = size_button(at)  # a client that is not the page clicks it anyway
+    forged.proto.disabled = False
+    forged.click().run()
+    assert state.stage(run) == "ingested"  # nothing was sized
 
 
 @pytest.mark.slow
@@ -547,7 +551,8 @@ def test_T10_4_the_demo_bounds_the_shifts_and_the_free_text_of_the_form(
 
     at.number_input(key=f"{key}.operations.shifts_per_day").set_value(300).run()
     shifts = {"name": "operations.shifts_per_day", "max": demo_limits.MAX_SHIFTS}
-    assert [e.value for e in at.error] == [tr("demo.limit.maximum", "en", **shifts)]
+    shown = [e.value for e in at.error]  # beside the library's own "exceed 24 h"
+    assert tr("demo.limit.maximum", "en", **shifts) in shown and len(shown) == 2, shown
     assert saves(at).disabled  # type: ignore[attr-defined]
     at.number_input(key=f"{key}.operations.shifts_per_day").set_value(2).run()
     assert not at.error

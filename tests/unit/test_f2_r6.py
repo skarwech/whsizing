@@ -381,6 +381,16 @@ def test_R6_2_a_saved_header_row_on_a_blank_line_reads_the_file_like_polars_does
     assert table.df["name"].to_list() == ['Ecran 24" LED', "y"]
 
 
+def test_R6_2_a_blank_data_line_keeps_the_line_numbers_of_the_rows_after_it(tmp_path: Path) -> None:
+    """`__source_row__` is the provenance of a row in the client's file: the lenient reader (a
+    stray quote) must not renumber the rows that follow a blank data line."""
+    path = tmp_path / "g.csv"
+    path.write_text('sku;qty;name\nA;1;Ecran 24" LED\n\nB;2;y\n', encoding="utf-8")
+    table = read_any(path)
+    assert table.df["__source_row__"].to_list() == [2, 4]  # lines 2 and 4 of the file
+    assert table.df["sku"].to_list() == ["A", "B"]
+
+
 def test_R6_2_a_file_of_blank_lines_and_a_quote_names_the_file(tmp_path: Path) -> None:
     from whsizing.io.readers import _read_csv_lenient  # pyright: ignore[reportPrivateUsage]
 

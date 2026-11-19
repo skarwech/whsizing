@@ -6,7 +6,7 @@ import json
 
 import streamlit as st
 
-from whsizing.app import basis_form, demo_limits, demo_ui, entry, loaders, state
+from whsizing.app import basis_form, demo, demo_limits, demo_ui, entry, loaders, state
 from whsizing.app.strings import tr
 from whsizing.cli._runio import read_model
 from whsizing.design import load_basis
@@ -83,6 +83,7 @@ basis, errors = basis_form.validate(nested, catalog)  # the overrides must name 
 limits = demo_ui.limit_messages(demo_limits.limit_problems(nested, {}, catalog), lg)  # demo only
 errors = [*problems, *errors, *limits]
 
+preview_failed = False
 with right:
     if errors:
         for message in errors:
@@ -97,10 +98,18 @@ with right:
                 catalog_key,
             )
             show_design_day(day, lg)
+        except WhsizingError as e:
+            preview_failed = True
+            state.error(f"{type(e).__name__}: {e}")
         except Exception as e:  # a value the form lets through that no rule of the library
-            state.error(f"{type(e).__name__}: {e}")  # refuses (a time zone): a message, not a crash
+            preview_failed = True  # refuses (a time zone): a message, not a crash
+            if demo.demo_only():  # the library's own text names a setting a visitor cannot reach
+                st.error(tr("basis.preview_failed", lg, type=type(e).__name__))
+            else:
+                state.error(f"{type(e).__name__}: {e}")
 
-if st.button(tr("basis.save", lg), type="primary", disabled=bool(errors)) and not errors:
+blocked = bool(errors) or preview_failed
+if st.button(tr("basis.save", lg), type="primary", disabled=blocked) and not blocked:
     path = state.write_draft(run, "basis", nested)
     try:
         load_basis(path)  # the loader of the CLI: same checks

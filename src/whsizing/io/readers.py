@@ -128,9 +128,13 @@ def _read_csv_lenient(path: Path, body: str, delimiter: str) -> pl.DataFrame:
     padded / truncated to the header like Polars. A quote that never closes is a MappingError."""
     reader = csv.reader(io.StringIO(body), delimiter=delimiter)
     try:
-        rows = [r for r in reader if r]  # blank lines: Polars skips them, the header is the first
-    except csv.Error as e:  # line that is not
+        rows = list(reader)
+    except csv.Error as e:
         raise MappingError(f"{path.name}: unreadable CSV near line {reader.line_num}: {e}") from e
+    # blank lines before the header: Polars skips them, the header is the first line that is not
+    # (a blank data line stays: the rows after it keep their line numbers in `__source_row__`)
+    while rows and not rows[0]:
+        del rows[0]
     if not rows:
         raise MappingError(f"{path.name}: no header row to read (the file has only blank lines)")
     spanning = next((i for i, r in enumerate(rows) if any("\n" in c for c in r)), None)

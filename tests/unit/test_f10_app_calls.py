@@ -127,7 +127,7 @@ def test_T10_4_an_upload_above_a_quarter_of_the_memory_is_sent_to_the_cli() -> N
 def test_T10_4_the_upload_cap_is_the_option_of_the_server(monkeypatch: pytest.MonkeyPatch) -> None:
     options: dict[str, object] = {"server.maxUploadSize": 1}
     monkeypatch.setattr(ingest_ui.st, "get_option", lambda key: options.get(key))
-    assert ingest_ui.upload_cap_mb() == 1  # `.streamlit/config.toml`, a plain `streamlit run`
+    assert ingest_ui.upload_cap_mb() == 1  # a small cap (the repository's config sets 0)
     options["server.maxUploadSize"] = 1024  # `just app`
     assert ingest_ui.upload_cap_mb() == 1024
     options["server.maxUploadSize"] = "not a number"

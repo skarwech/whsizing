@@ -59,7 +59,7 @@ just demo-app      # the public demo: synthetic data, no upload
 The acceptance tests of the specification follow `test_T<feature>_<n>_...` in `tests/**/test_f<feature>_*.py`; the others are named for what they check. `just --list` shows every
 recipe (`bench`, `golden-update`, `docker-demo`, ...). Always run `uv run ...` from the repository
 root, never the system Python. `just demo` runs the quickstart (synthetic data, then `run-all`; `WHSIZING_SALT` defaults to a demo value);
-`just docker-demo` does the same inside the image (the CI job `docker-smoke` runs it on every push).
+`just docker-demo` does the same inside the image (the CI job `docker-smoke` runs it on every push to main and every pull request, once lint, typecheck and the tests pass).
 
 ## Documentation
 

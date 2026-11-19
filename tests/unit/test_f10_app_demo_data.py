@@ -410,8 +410,17 @@ def test_a_run_has_its_own_name_before_it_is_first_marked_so_the_stock_name_is_n
         seen.append(("first" if target is None else target.name, folders))
         return real(command, **kwargs)
 
+    marked: list[str] = []
+    real_mark = demo.mark
+
+    def mark_spy(folder: Path, *, shared: bool = False) -> None:
+        marked.append(folder.name)  # the name the folder has when it is first made reachable
+        real_mark(folder, shared=shared)
+
     monkeypatch.setattr(demo, "call", spy)
+    monkeypatch.setattr(demo, "mark", mark_spy)
     run = demo.load_demo(built.runs)
+    assert marked and all(suffixed.fullmatch(name) for name in marked), marked
     assert len(seen) == len(demo.DATASETS) and suffixed.fullmatch(run.name)
     for target, _ in seen[1:]:  # the datasets after the first go into the renamed folder
         assert suffixed.fullmatch(target), target

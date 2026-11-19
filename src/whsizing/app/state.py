@@ -346,6 +346,14 @@ def require_run(lg: Lang, run: Path | None, wanted: Stage = "ingested") -> Path:
         st.info(tr("demo.no_run" if demo.demo_only() else "no_run", lg))
         st.stop()
     if not reached(run, wanted):
-        st.info(tr("stage_missing", lg, stage=wanted, have=stage(run)))
+        unfinished = wanted == "compared" and reached(run, "sized")  # sizing or comparison failed
+        st.info(
+            tr(
+                "run.unfinished" if unfinished else "stage_missing",
+                lg,
+                stage=wanted,
+                have=stage(run),
+            )
+        )
         st.stop()
     return run

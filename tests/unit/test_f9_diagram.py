@@ -457,3 +457,12 @@ def test_T9_6_the_dpi_of_the_measuring_canvas_follows_the_budget_and_stays_legib
     assert dpi is not None and MIN_CANVAS_DPI <= dpi < float(matplotlib.rcParams["figure.dpi"])
     assert (side_px / PT_PER_INCH * dpi) ** 2 <= CANVAS_BUDGET_PX * 1.0001
     assert _canvas_dpi(layout, 560.0, 400.0) is None  # a normal diagram: matplotlib's dpi
+
+
+@pytest.mark.parametrize("size", [float("nan"), float("inf")])
+def test_T9_6_a_plan_of_no_finite_size_is_refused_too(size: float) -> None:
+    from whsizing.report.diagram import _canvas_dpi  # pyright: ignore[reportPrivateUsage]
+
+    layout = layout_blocks({"storage": 10.0}, 100.0, "S1")
+    with pytest.raises(ConfigError, match="too large to draw"):
+        _canvas_dpi(layout, size, 400.0)

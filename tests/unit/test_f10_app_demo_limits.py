@@ -218,9 +218,14 @@ def test_long_texts_are_listed_a_few_at_a_time_and_cards_over_the_count_are_not_
     many = {f"field{i}": long for i in range(20)}
     texts = [p for p in limit_problems(many, {}, catalog) if p[0] == "demo.limit.text"]
     assert len(texts) == 3  # not one message per text
-    cards = [{"id": f"S{i}", "name": long if i == MAX_SCENARIOS + 3 else "s"} for i in range(9)]
-    problems = limit_problems({}, {"scenarios": cards}, catalog)
+    cards = [{"id": f"S{i}", "name": long if i == MAX_SCENARIOS + 2 else "s"} for i in range(9)]
+    problems = limit_problems({}, {"scenarios": cards}, catalog)  # the long name is on card 8 of 9
     assert keys(problems) == ["demo.limit.scenarios"]  # refused by its count: the rest is not read
+    first = [{"id": f"S{i}", "name": long if i == 0 else "s"} for i in range(9)]
+    assert keys(limit_problems({}, {"scenarios": first}, catalog)) == [  # while one that is read
+        "demo.limit.scenarios",
+        "demo.limit.text",
+    ]  # is reported
 
 
 def test_the_demo_reads_yaml_without_aliases_the_full_app_with_them(
@@ -240,6 +245,18 @@ def test_the_demo_reads_yaml_without_aliases_the_full_app_with_them(
         parse_yaml(bomb)  # ...and is refused at its first alias
     assert parse_yaml("a: [1, 2]\nb: {c: 3}\n") == {"a": [1, 2], "b": {"c": 3}}  # as before
     assert parse_yaml("") is None
+
+
+def test_the_pointer_to_a_folder_of_the_server_is_dropped_from_a_message(
+    public: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """'no scenario computed: not computed: S0 (see <runs>/2026-.../)': a folder a visitor cannot
+    open, which the library names as the place to look."""
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    monkeypatch.setenv("WHSIZING_RUNS", str(runs))
+    message = f"no scenario computed: not computed: S0 (see {runs}/2026-11-17T10-00-00_ab); S0: bad"
+    assert scrub(message) == "no scenario computed: not computed: S0; S0: bad"
 
 
 def test_a_yaml_box_over_the_limit_is_refused_in_the_demo_only(

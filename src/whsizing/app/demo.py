@@ -54,7 +54,7 @@ SCENARIOS = Path("scenarios/demo_scenarios.yaml")
 DATASETS: tuple[DatasetKind, ...] = ("sku_master", "order_lines", "inventory", "receipts")
 MARKER = Path("ui") / "demo.json"
 SEED = 42
-RUN_MAX_AGE_S = 3 * 3600  # [P] a visitor's demo run is deleted three hours after it was made
+RUN_MAX_AGE_S = 3 * 3600  # [P] a demo run older than this goes at the next `load_demo` (no timer)
 MAX_RUNS = 30  # [P] and above this many demo runs the oldest go first (the shared one stays)
 
 _LOCK = threading.RLock()  # one data generation / shared build at a time

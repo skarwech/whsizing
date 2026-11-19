@@ -63,7 +63,8 @@ def test_T10_4_streamlit_config_turns_telemetry_off_and_only_the_full_app_allows
 ):
     """Streamlit serves its upload route whether or not a page has an uploader, and keeps what a
     client sends in memory: the shared config (read by the hosted demo, which takes no upload)
-    sets the cap to 0, which refuses every body (a cap of 1 kept 300 requests of 0.9 MB, +283 MB),
+    sets the cap to 0, which refuses every non-empty body (a cap of 1 kept 300 requests of 0.9 MB,
+    +283 MB; an empty upload sent in chunks is still recorded, about 4 KB each),
     and `just app` (the full app, spec: 1024 MB) raises it."""
     config = tomllib.loads((ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert config["browser"]["gatherUsageStats"] is False
